@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>動体追跡カメラ</title>
+  <title>AI物体追跡カメラ</title>
+  <!-- TensorFlow.js と COCO-SSD モデルを読み込み -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -47,54 +50,7 @@
     button:hover:not(:disabled) { background: #2a2a2a; color: #fff; }
     button:disabled { opacity: 0.4; cursor: default; }
     button.active-cam { background: #c0392b; color: #fff; border-color: #e74c3c; }
-    button.active-rec { background: #8e44ad; color: #fff; border-color: #9b59b6; animation: pulse 1.2s infinite; }
-    button.btn-shot { border-color: #2980b9; color: #5dade2; }
-    button.btn-shot:hover:not(:disabled) { background: #1a2a3a; }
-    button.btn-zoom {
-      width: 32px; height: 32px;
-      padding: 0;
-      font-size: 16px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    button.btn-zoom:hover:not(:disabled) { background: #2a3a2a; color: #7dcea0; border-color: #7dcea0; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
-    label {
-      font-size: 12px;
-      color: #888;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    input[type=range] { width: 80px; accent-color: #e74c3c; }
-    #zoomRange { width: 100px; accent-color: #27ae60; }
-    #status { font-size: 11px; color: #666; }
-    #recTimer { font-size: 11px; color: #9b59b6; display: none; letter-spacing: 0.08em; }
-
-    /* ズームコントロール行 */
-    #zoomRow {
-      display: none;
-      gap: 8px;
-      margin-bottom: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: center;
-      width: 100%;
-      max-width: 720px;
-    }
-    #zoomRow.visible { display: flex; }
-    #zoomLabel {
-      font-size: 12px;
-      color: #7dcea0;
-      letter-spacing: 0.05em;
-      min-width: 60px;
-    }
-    #zoomModeNote {
-      font-size: 10px;
-      color: #555;
-      text-align: center;
-    }
+    label { font-size: 11px; color: #888; }
 
     #canvas-wrap {
       position: relative;
@@ -113,143 +69,40 @@
       object-fit: cover;
     }
     #vid { opacity: 0; }
-    #canvas { display: block; }
-    #hud {
-      position: absolute;
-      top: 10px; left: 12px;
-      font-size: 11px;
-      color: #ff4444;
-      letter-spacing: 0.1em;
-      pointer-events: none;
-    }
-    #zoomHud {
-      position: absolute;
-      top: 10px; left: 50%;
-      transform: translateX(-50%);
-      font-size: 11px;
-      color: #7dcea0;
-      letter-spacing: 0.08em;
-      pointer-events: none;
-      display: none;
-    }
-    #recHud {
-      position: absolute;
-      top: 10px; right: 12px;
-      font-size: 11px;
-      color: #9b59b6;
-      letter-spacing: 0.1em;
-      pointer-events: none;
-      display: none;
-    }
-    #flash {
-      position: absolute;
-      inset: 0;
-      background: #fff;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.05s;
-      border-radius: 10px;
-    }
     #info {
       margin-top: 10px;
       font-size: 11px;
       color: #555;
       display: flex;
       gap: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
     }
-    #info span { color: #aaa; font-weight: bold; }
-    #error {
-      margin-top: 12px;
-      font-size: 12px;
-      color: #e74c3c;
-      text-align: center;
-      max-width: 500px;
-      line-height: 1.6;
-      display: none;
-    }
-    #gallery { margin-top: 16px; width: 100%; max-width: 720px; }
-    #galleryTitle { font-size: 11px; color: #555; margin-bottom: 8px; letter-spacing: 0.08em; display: none; }
-    #galleryGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-    .gallery-item {
-      position: relative;
-      border-radius: 6px;
-      overflow: hidden;
-      border: 1px solid #2a2a2a;
-      background: #111;
-    }
-    .gallery-item img, .gallery-item video {
-      width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover;
-    }
-    .dl-btn {
-      position: absolute; bottom: 4px; right: 4px;
-      font-size: 10px; padding: 3px 8px; border-radius: 4px;
-      background: rgba(0,0,0,0.75); border: 1px solid #444; color: #ccc; cursor: pointer;
-    }
-    .type-badge {
-      position: absolute; top: 4px; left: 4px;
-      font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em;
-    }
-    .badge-shot { background: rgba(41,128,185,0.85); color: #aee; }
-    .badge-rec  { background: rgba(142,68,173,0.85); color: #dbd; }
+    #status { color: #ffbb00; }
+    #target-list { color: #aaa; margin-bottom: 10px; font-size: 11px;}
   </style>
 </head>
 <body>
 
-<h1>&#9654; Motion Tracker</h1>
+<h1>▶ AI Object Tracker</h1>
+<div id="target-list">対象: 人(person), 車(car), 自転車(bicycle), ボール(sports ball)</div>
 
 <div class="control-row">
-  <button id="btnStart">カメラ起動</button>
+  <button id="btnStart">カメラ起動 & モデル読込</button>
   <button id="btnStop" disabled>停止</button>
-  <label>感度
-    <input type="range" id="sens" min="5" max="60" value="25" step="1">
-    <span id="sensVal">25</span>
-  </label>
-  <label>軌跡
-    <input type="range" id="trail" min="10" max="120" value="50" step="5">
-    <span id="trailVal">50</span>
+  <label>軌跡の長さ
+    <input type="range" id="trail" min="5" max="100" value="30">
+    <span id="trailVal">30</span>
   </label>
   <span id="status">待機中</span>
-</div>
-
-<div class="control-row">
-  <button id="btnShot" disabled class="btn-shot">&#128247; スクリーンショット</button>
-  <button id="btnRec" disabled>&#9210; 録画開始</button>
-  <button id="btnRecStop" disabled>&#9209; 録画停止</button>
-  <span id="recTimer">&#9210; 00:00</span>
-</div>
-
-<!-- ズームコントロール -->
-<div id="zoomRow">
-  <span id="zoomLabel">ZOOM ×<span id="zoomVal">1.0</span></span>
-  <button class="btn-zoom" id="btnZoomOut" title="ズームアウト">－</button>
-  <input type="range" id="zoomRange" min="100" max="1000" value="100" step="10">
-  <button class="btn-zoom" id="btnZoomIn" title="ズームイン">＋</button>
-  <button id="btnZoomReset" style="font-size:11px; padding:5px 10px;">リセット</button>
-  <span id="zoomModeNote"></span>
 </div>
 
 <div id="canvas-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
-  <div id="hud">&#9679; REC</div>
-  <div id="zoomHud">&#128269; ×<span id="zoomHudVal">1.0</span></div>
-  <div id="recHud">&#9210; REC</div>
-  <div id="flash"></div>
 </div>
 
 <div id="info">
-  <div>物体数: <span id="objCount">0</span></div>
-  <div>最大速度: <span id="maxSpeed">0</span> px/s</div>
-  <div>FPS: <span id="fps">0</span></div>
-</div>
-
-<div id="error"></div>
-
-<div id="gallery">
-  <div id="galleryTitle">SAVED FILES</div>
-  <div id="galleryGrid"></div>
+  <div>検知数: <span id="objCount" style="color:#fff">0</span></div>
+  <div>FPS: <span id="fps" style="color:#fff">0</span></div>
 </div>
 
 <script>
@@ -258,454 +111,147 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const btnStart = document.getElementById('btnStart');
 const btnStop = document.getElementById('btnStop');
-const btnShot = document.getElementById('btnShot');
-const btnRec = document.getElementById('btnRec');
-const btnRecStop = document.getElementById('btnRecStop');
 const statusEl = document.getElementById('status');
-const sensEl = document.getElementById('sens');
-const sensValEl = document.getElementById('sensVal');
 const trailEl = document.getElementById('trail');
 const trailValEl = document.getElementById('trailVal');
 const objCountEl = document.getElementById('objCount');
-const maxSpeedEl = document.getElementById('maxSpeed');
 const fpsEl = document.getElementById('fps');
-const hud = document.getElementById('hud');
-const recHud = document.getElementById('recHud');
-const flash = document.getElementById('flash');
-const recTimerEl = document.getElementById('recTimer');
-const errorEl = document.getElementById('error');
-const galleryTitle = document.getElementById('galleryTitle');
-const galleryGrid = document.getElementById('galleryGrid');
-
-const zoomRow = document.getElementById('zoomRow');
-const zoomRange = document.getElementById('zoomRange');
-const zoomVal = document.getElementById('zoomVal');
-const zoomHud = document.getElementById('zoomHud');
-const zoomHudVal = document.getElementById('zoomHudVal');
-const btnZoomIn = document.getElementById('btnZoomIn');
-const btnZoomOut = document.getElementById('btnZoomOut');
-const btnZoomReset = document.getElementById('btnZoomReset');
-const zoomModeNote = document.getElementById('zoomModeNote');
 
 let stream = null;
+let model = null;
 let animId = null;
-let prevFrame = null;
-let trails = [];
-let maxTrailLen = 50;
-let sensitivity = 25;
+let trails = {}; // 物体IDごとに軌跡を保持
+let maxTrailLen = 30;
 let frameCount = 0;
 let lastFpsTime = performance.now();
-let currentFps = 0;
 
-let mediaRecorder = null;
-let recordedChunks = [];
-let recStartTime = null;
-let recTimerInterval = null;
+// 追跡対象のラベル（COCO-SSDの定義に準拠）
+const TARGET_CLASSES = ['person', 'car', 'bicycle', 'sports ball'];
 
-// ズーム状態
-let zoomLevel = 1.0;       // 現在の倍率
-let zoomMin = 1.0;
-let zoomMax = 10.0;
-let nativeZoomSupported = false;  // カメラのネイティブズームが使えるか
-let currentTrack = null;
-
-sensEl.addEventListener('input', () => { sensitivity = +sensEl.value; sensValEl.textContent = sensitivity; });
-trailEl.addEventListener('input', () => { maxTrailLen = +trailEl.value; trailValEl.textContent = maxTrailLen; });
-
-// ---- ズームUI更新 ----
-function updateZoomUI(level) {
-  zoomLevel = level;
-  const disp = level.toFixed(1);
-  zoomVal.textContent = disp;
-  zoomHudVal.textContent = disp;
-  zoomRange.value = Math.round(level * 100);
-  zoomHud.style.display = level > 1.0 ? 'block' : 'none';
-}
-
-async function applyZoom(level) {
-  level = Math.max(zoomMin, Math.min(zoomMax, level));
-  if (nativeZoomSupported && currentTrack) {
-    try {
-      await currentTrack.applyConstraints({ advanced: [{ zoom: level }] });
-    } catch(e) {}
-  }
-  updateZoomUI(level);
-}
-
-zoomRange.addEventListener('input', () => {
-  applyZoom(+zoomRange.value / 100);
+trailEl.addEventListener('input', () => { 
+  maxTrailLen = +trailEl.value; 
+  trailValEl.textContent = maxTrailLen; 
 });
 
-btnZoomIn.addEventListener('click', () => {
-  applyZoom(Math.min(zoomMax, zoomLevel + 0.5));
-});
-btnZoomOut.addEventListener('click', () => {
-  applyZoom(Math.max(zoomMin, zoomLevel - 0.5));
-});
-btnZoomReset.addEventListener('click', () => {
-  applyZoom(1.0);
-});
-
-// ピンチズーム（タッチ操作）
-let lastPinchDist = null;
-const canvasWrap = document.getElementById('canvas-wrap');
-canvasWrap.addEventListener('touchstart', e => {
-  if (e.touches.length === 2) lastPinchDist = getPinchDist(e.touches);
-}, { passive: true });
-canvasWrap.addEventListener('touchmove', e => {
-  if (e.touches.length === 2 && lastPinchDist) {
-    const dist = getPinchDist(e.touches);
-    const delta = (dist - lastPinchDist) / 200;
-    applyZoom(zoomLevel + delta);
-    lastPinchDist = dist;
-  }
-}, { passive: true });
-canvasWrap.addEventListener('touchend', () => { lastPinchDist = null; });
-
-function getPinchDist(touches) {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.sqrt(dx*dx + dy*dy);
-}
-
-// ---- カメラ起動 ----
+// モデルとカメラの初期化
 btnStart.addEventListener('click', async () => {
-  errorEl.style.display = 'none';
+  statusEl.textContent = 'モデル読み込み中...';
+  btnStart.disabled = true;
+
   try {
+    // 1. モデルのロード
+    if (!model) {
+      model = await cocoSsd.load();
+    }
+    
+    // 2. カメラの起動
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: { facingMode: 'environment', width: 640, height: 480 }
     });
     vid.srcObject = stream;
     await vid.play();
 
-    // ズーム対応チェック
-    currentTrack = stream.getVideoTracks()[0];
-    const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
-    if (caps.zoom) {
-      nativeZoomSupported = true;
-      zoomMin = caps.zoom.min || 1.0;
-      zoomMax = caps.zoom.max || 10.0;
-      zoomRange.min = Math.round(zoomMin * 100);
-      zoomRange.max = Math.round(zoomMax * 100);
-      zoomModeNote.textContent = 'ネイティブズーム対応';
-      zoomModeNote.style.color = '#27ae60';
-    } else {
-      nativeZoomSupported = false;
-      zoomMin = 1.0;
-      zoomMax = 10.0;
-      zoomRange.min = 100;
-      zoomRange.max = 1000;
-      zoomModeNote.textContent = 'デジタルズーム';
-      zoomModeNote.style.color = '#888';
-    }
-    zoomRow.classList.add('visible');
-    updateZoomUI(1.0);
-
-    btnStart.disabled = true;
     btnStop.disabled = false;
-    btnShot.disabled = false;
-    btnRec.disabled = false;
     btnStop.classList.add('active-cam');
-    statusEl.textContent = '追跡中...';
-    hud.style.color = '#ff3333';
-    prevFrame = null;
-    trails = [];
-    frameCount = 0;
-    lastFpsTime = performance.now();
+    statusEl.textContent = '追跡中';
+    
+    // 描画ループ開始
     loop();
-  } catch(e) {
-    let msg = 'カメラにアクセスできませんでした。';
-    if (e.name === 'NotAllowedError') {
-      msg += '<br>ブラウザのアドレスバー左のアイコン→「カメラ」→「許可」に変更してページをリロードしてください。';
-    } else if (e.name === 'NotFoundError') {
-      msg += '<br>カメラデバイスが見つかりません。';
-    } else {
-      msg += '<br>' + e.message;
-    }
-    errorEl.innerHTML = msg;
-    errorEl.style.display = 'block';
+  } catch (e) {
+    alert('エラー: ' + e.message);
+    btnStart.disabled = false;
     statusEl.textContent = 'エラー';
   }
 });
 
-// ---- カメラ停止 ----
 btnStop.addEventListener('click', () => {
-  if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
-  if (animId) { cancelAnimationFrame(animId); animId = null; }
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  currentTrack = null;
-  zoomRow.classList.remove('visible');
-  zoomHud.style.display = 'none';
-  updateZoomUI(1.0);
+  if (animId) cancelAnimationFrame(animId);
+  if (stream) stream.getTracks().forEach(t => t.stop());
   btnStart.disabled = false;
   btnStop.disabled = true;
-  btnShot.disabled = true;
-  btnRec.disabled = true;
-  btnRecStop.disabled = true;
   btnStop.classList.remove('active-cam');
-  statusEl.textContent = '停止';
-  hud.style.color = '#444';
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#111';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  drawStandby();
+  statusEl.textContent = '停止中';
+  trails = {};
 });
 
-// ---- スクリーンショット ----
-btnShot.addEventListener('click', () => {
-  flash.style.opacity = '0.8';
-  setTimeout(() => { flash.style.opacity = '0'; }, 120);
-  const ts = timestamp();
-  const dataUrl = canvas.toDataURL('image/png');
-  addGalleryItem(dataUrl, 'image', 'shot_' + ts + '.png', null);
-  autoDownload(dataUrl, 'shot_' + ts + '.png');
-});
+async function loop() {
+  const W = canvas.width = canvas.parentElement.clientWidth;
+  const H = canvas.height = canvas.parentElement.clientHeight;
 
-// ---- 録画 ----
-btnRec.addEventListener('click', () => {
-  if (!stream) return;
-  recordedChunks = [];
-  const canvasStream = canvas.captureStream(30);
-  const mimeType = getSupportedMimeType();
-  try {
-    mediaRecorder = new MediaRecorder(canvasStream, mimeType ? { mimeType } : {});
-  } catch(e) {
-    mediaRecorder = new MediaRecorder(canvasStream);
-  }
-  mediaRecorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-  };
-  mediaRecorder.onstop = () => {
-    const mType = mediaRecorder.mimeType || 'video/webm';
-    const ext = mType.includes('mp4') ? 'mp4' : 'webm';
-    const blob = new Blob(recordedChunks, { type: mType });
-    const url = URL.createObjectURL(blob);
-    const ts = timestamp();
-    addGalleryItem(url, 'video', 'rec_' + ts + '.' + ext, blob);
-  };
-  mediaRecorder.start(100);
-  recStartTime = Date.now();
-  recTimerEl.style.display = 'inline';
-  recTimerInterval = setInterval(updateRecTimer, 500);
-  recHud.style.display = 'block';
-  btnRec.disabled = true;
-  btnRecStop.disabled = false;
-  btnRecStop.classList.add('active-rec');
-  statusEl.textContent = '録画中...';
-});
-
-btnRecStop.addEventListener('click', stopRecording);
-
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-  clearInterval(recTimerInterval);
-  recTimerEl.style.display = 'none';
-  recHud.style.display = 'none';
-  btnRec.disabled = false;
-  btnRecStop.disabled = true;
-  btnRecStop.classList.remove('active-rec');
-  statusEl.textContent = '追跡中...';
-}
-
-function updateRecTimer() {
-  const sec = Math.floor((Date.now() - recStartTime) / 1000);
-  const m = String(Math.floor(sec / 60)).padStart(2, '0');
-  const s = String(sec % 60).padStart(2, '0');
-  recTimerEl.textContent = '\u23FA ' + m + ':' + s;
-}
-
-function getSupportedMimeType() {
-  const types = ['video/mp4', 'video/webm;codecs=h264', 'video/webm;codecs=vp9', 'video/webm'];
-  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
-}
-
-function addGalleryItem(url, type, filename, blob) {
-  galleryTitle.style.display = 'block';
-  const item = document.createElement('div');
-  item.className = 'gallery-item';
-  const badge = document.createElement('div');
-  badge.className = 'type-badge ' + (type === 'image' ? 'badge-shot' : 'badge-rec');
-  badge.textContent = type === 'image' ? 'SHOT' : 'REC';
-  item.appendChild(badge);
-  if (type === 'image') {
-    const img = document.createElement('img');
-    img.src = url;
-    item.appendChild(img);
-  } else {
-    const v = document.createElement('video');
-    v.src = url; v.controls = true; v.loop = true;
-    item.appendChild(v);
-  }
-  const dlBtn = document.createElement('button');
-  dlBtn.className = 'dl-btn';
-  dlBtn.textContent = '\u2193 保存';
-  dlBtn.addEventListener('click', () => {
-    blob ? autoDownloadBlob(blob, filename) : autoDownload(url, filename);
-  });
-  item.appendChild(dlBtn);
-  galleryGrid.prepend(item);
-}
-
-function autoDownload(dataUrl, filename) {
-  const a = document.createElement('a');
-  a.href = dataUrl; a.download = filename; a.click();
-}
-function autoDownloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
-function timestamp() {
-  const d = new Date();
-  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0'),
-    String(d.getHours()).padStart(2,'0'), String(d.getMinutes()).padStart(2,'0'), String(d.getSeconds()).padStart(2,'0')].join('');
-}
-
-// ---- メインループ ----
-function resize() {
-  const wrap = canvas.parentElement;
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
-}
-
-function drawStandby() {
-  ctx.fillStyle = '#2a2a2a';
-  ctx.font = '13px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('「カメラ起動」を押してください', canvas.width / 2, canvas.height / 2);
-}
-
-function loop() {
-  resize();
-  if (!vid.videoWidth) { animId = requestAnimationFrame(loop); return; }
-
-  const W = canvas.width, H = canvas.height;
-  const vw = vid.videoWidth, vh = vid.videoHeight;
-
-  // デジタルズーム: 中央をクロップして拡大描画
-  const z = nativeZoomSupported ? 1.0 : zoomLevel;
-  const cropW = vw / z;
-  const cropH = vh / z;
-  const cropX = (vw - cropW) / 2;
-  const cropY = (vh - cropH) / 2;
-
+  // 1. 映像をキャンバスに描画
   ctx.save();
-  ctx.scale(-1, 1);
-  ctx.drawImage(vid, cropX, cropY, cropW, cropH, -W, 0, W, H);
+  ctx.scale(-1, 1); // 鏡像
+  ctx.drawImage(vid, -W, 0, W, H);
   ctx.restore();
 
-  // 差分検出用バッファ（ズーム適用後の映像で検出）
-  const offscreen = document.createElement('canvas');
-  offscreen.width = Math.floor(cropW / 4);
-  offscreen.height = Math.floor(cropH / 4);
-  const oc = offscreen.getContext('2d');
-  oc.drawImage(vid, cropX, cropY, cropW, cropH, 0, 0, offscreen.width, offscreen.height);
-  const cur = oc.getImageData(0, 0, offscreen.width, offscreen.height);
+  // 2. 物体認識を実行
+  const predictions = await model.detect(vid);
 
-  let detectedPoints = [];
-  if (prevFrame) {
-    const curD = cur.data, prevD = prevFrame.data;
-    const ow = offscreen.width, oh = offscreen.height;
-    const cellSize = 8;
-    const cols = Math.floor(ow / cellSize), rows = Math.floor(oh / cellSize);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        let diffSum = 0, count = 0;
-        for (let dy = 0; dy < cellSize; dy++) {
-          for (let dx = 0; dx < cellSize; dx++) {
-            const px = c * cellSize + dx, py = r * cellSize + dy;
-            if (px >= ow || py >= oh) continue;
-            const i = (py * ow + px) * 4;
-            diffSum += (Math.abs(curD[i]-prevD[i]) + Math.abs(curD[i+1]-prevD[i+1]) + Math.abs(curD[i+2]-prevD[i+2])) / 3;
-            count++;
-          }
-        }
-        if (count > 0 && diffSum / count > sensitivity) {
-          const cx = (c * cellSize + cellSize / 2) / ow;
-          const cy = (r * cellSize + cellSize / 2) / oh;
-          detectedPoints.push({ x: (1 - cx) * W, y: cy * H });
-        }
-      }
-    }
-  }
-  prevFrame = cur;
+  // 3. 対象の物体だけフィルタリングして描画
+  const detectedTargets = predictions.filter(p => TARGET_CLASSES.includes(p.class));
+  objCountEl.textContent = detectedTargets.length;
 
-  const clusters = clusterPoints(detectedPoints, W * 0.08);
-  while (trails.length < clusters.length) trails.push([]);
-  while (trails.length > clusters.length + 2) trails.pop();
+  detectedTargets.forEach((p, i) => {
+    // 中心点を計算（鏡像に合わせて反転）
+    const x = W - (p.bbox[0] + p.bbox[2] / 2) * (W / vid.videoWidth);
+    const y = (p.bbox[1] + p.bbox[3] / 2) * (H / vid.videoHeight);
+    
+    // 簡易的なID管理（今回はインデックスを使用）
+    const id = p.class + "_" + i;
+    if (!trails[id]) trails[id] = [];
+    
+    trails[id].push({x, y});
+    if (trails[id].length > maxTrailLen) trails[id].shift();
 
-  let maxSpd = 0;
-  clusters.forEach((pt, i) => {
-    if (!trails[i]) trails[i] = [];
-    const t = trails[i];
-    if (t.length > 0) {
-      const prev = t[t.length - 1];
-      const dx = pt.x - prev.x, dy = pt.y - prev.y;
-      const spd = Math.sqrt(dx*dx + dy*dy) * currentFps;
-      if (spd > maxSpd) maxSpd = spd;
-    }
-    t.push({ x: pt.x, y: pt.y });
-    if (t.length > maxTrailLen) t.shift();
-  });
-  trails = trails.filter(t => t.length > 0);
-
-  trails.forEach(t => {
-    if (t.length < 2) return;
-    for (let i = 1; i < t.length; i++) {
-      const alpha = i / t.length;
-      ctx.beginPath();
-      ctx.moveTo(t[i-1].x, t[i-1].y);
-      ctx.lineTo(t[i].x, t[i].y);
-      ctx.strokeStyle = 'rgba(226,75,74,' + (alpha * 0.9) + ')';
-      ctx.lineWidth = 1.5 + alpha * 2;
-      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      ctx.stroke();
-    }
-    const tip = t[t.length - 1];
-    ctx.beginPath();
-    ctx.arc(tip.x, tip.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff3333'; ctx.fill();
-    ctx.beginPath();
-    ctx.arc(tip.x, tip.y, 11, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,60,60,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // 軌跡の描画
+    drawTrail(trails[id], p.class);
   });
 
+  // 古い軌跡（検知されなくなったもの）を徐々に削除
+  Object.keys(trails).forEach(id => {
+    const isStillDetected = detectedTargets.some((p, i) => (p.class + "_" + i) === id);
+    if (!isStillDetected && trails[id].length > 0) {
+      trails[id].shift();
+    }
+  });
+
+  // FPS計算
   frameCount++;
   const now = performance.now();
   if (now - lastFpsTime > 1000) {
-    currentFps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+    fpsEl.textContent = Math.round(frameCount / ((now - lastFpsTime) / 1000));
     frameCount = 0; lastFpsTime = now;
-    fpsEl.textContent = currentFps;
   }
-  objCountEl.textContent = clusters.length;
-  maxSpeedEl.textContent = Math.round(maxSpd);
+
   animId = requestAnimationFrame(loop);
 }
 
-function clusterPoints(pts, radius) {
-  if (!pts.length) return [];
-  const visited = new Array(pts.length).fill(false);
-  const clusters = [];
-  for (let i = 0; i < pts.length; i++) {
-    if (visited[i]) continue;
-    let cx = pts[i].x, cy = pts[i].y, cnt = 1;
-    visited[i] = true;
-    for (let j = i+1; j < pts.length; j++) {
-      if (visited[j]) continue;
-      const dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
-      if (Math.sqrt(dx*dx + dy*dy) < radius) { cx += pts[j].x; cy += pts[j].y; cnt++; visited[j] = true; }
-    }
-    clusters.push({ x: cx/cnt, y: cy/cnt });
-  }
-  return clusters;
-}
+function drawTrail(points, label) {
+  if (points.length < 2) return;
 
-resize();
-ctx.fillStyle = '#111';
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-drawStandby();
-window.addEventListener('resize', () => { if (!stream) { resize(); drawStandby(); } });
+  // 線を描画
+  ctx.beginPath();
+  ctx.strokeStyle = '#ff4444';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.stroke();
+
+  // 先端の点
+  const last = points[points.length - 1];
+  ctx.fillStyle = '#ff4444';
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ラベル表示
+  ctx.fillStyle = '#fff';
+  ctx.font = '12px Arial';
+  ctx.fillText(label, last.x + 10, last.y - 10);
+}
 </script>
 </body>
 </html>
