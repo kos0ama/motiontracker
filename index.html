@@ -50,6 +50,15 @@
     button.active-rec { background: #8e44ad; color: #fff; border-color: #9b59b6; animation: pulse 1.2s infinite; }
     button.btn-shot { border-color: #2980b9; color: #5dade2; }
     button.btn-shot:hover:not(:disabled) { background: #1a2a3a; }
+    button.btn-zoom {
+      width: 32px; height: 32px;
+      padding: 0;
+      font-size: 16px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    button.btn-zoom:hover:not(:disabled) { background: #2a3a2a; color: #7dcea0; border-color: #7dcea0; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
     label {
       font-size: 12px;
@@ -59,8 +68,34 @@
       gap: 6px;
     }
     input[type=range] { width: 80px; accent-color: #e74c3c; }
+    #zoomRange { width: 100px; accent-color: #27ae60; }
     #status { font-size: 11px; color: #666; }
     #recTimer { font-size: 11px; color: #9b59b6; display: none; letter-spacing: 0.08em; }
+
+    /* ズームコントロール行 */
+    #zoomRow {
+      display: none;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      max-width: 720px;
+    }
+    #zoomRow.visible { display: flex; }
+    #zoomLabel {
+      font-size: 12px;
+      color: #7dcea0;
+      letter-spacing: 0.05em;
+      min-width: 60px;
+    }
+    #zoomModeNote {
+      font-size: 10px;
+      color: #555;
+      text-align: center;
+    }
+
     #canvas-wrap {
       position: relative;
       border: 1px solid #2a2a2a;
@@ -86,6 +121,16 @@
       color: #ff4444;
       letter-spacing: 0.1em;
       pointer-events: none;
+    }
+    #zoomHud {
+      position: absolute;
+      top: 10px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #7dcea0;
+      letter-spacing: 0.08em;
+      pointer-events: none;
+      display: none;
     }
     #recHud {
       position: absolute;
@@ -175,10 +220,21 @@
   <span id="recTimer">&#9210; 00:00</span>
 </div>
 
+<!-- ズームコントロール -->
+<div id="zoomRow">
+  <span id="zoomLabel">ZOOM ×<span id="zoomVal">1.0</span></span>
+  <button class="btn-zoom" id="btnZoomOut" title="ズームアウト">－</button>
+  <input type="range" id="zoomRange" min="100" max="1000" value="100" step="10">
+  <button class="btn-zoom" id="btnZoomIn" title="ズームイン">＋</button>
+  <button id="btnZoomReset" style="font-size:11px; padding:5px 10px;">リセット</button>
+  <span id="zoomModeNote"></span>
+</div>
+
 <div id="canvas-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
-  <div id="hud">● REC</div>
+  <div id="hud">&#9679; REC</div>
+  <div id="zoomHud">&#128269; ×<span id="zoomHudVal">1.0</span></div>
   <div id="recHud">&#9210; REC</div>
   <div id="flash"></div>
 </div>
@@ -221,6 +277,16 @@ const errorEl = document.getElementById('error');
 const galleryTitle = document.getElementById('galleryTitle');
 const galleryGrid = document.getElementById('galleryGrid');
 
+const zoomRow = document.getElementById('zoomRow');
+const zoomRange = document.getElementById('zoomRange');
+const zoomVal = document.getElementById('zoomVal');
+const zoomHud = document.getElementById('zoomHud');
+const zoomHudVal = document.getElementById('zoomHudVal');
+const btnZoomIn = document.getElementById('btnZoomIn');
+const btnZoomOut = document.getElementById('btnZoomOut');
+const btnZoomReset = document.getElementById('btnZoomReset');
+const zoomModeNote = document.getElementById('zoomModeNote');
+
 let stream = null;
 let animId = null;
 let prevFrame = null;
@@ -236,17 +302,105 @@ let recordedChunks = [];
 let recStartTime = null;
 let recTimerInterval = null;
 
+// ズーム状態
+let zoomLevel = 1.0;       // 現在の倍率
+let zoomMin = 1.0;
+let zoomMax = 10.0;
+let nativeZoomSupported = false;  // カメラのネイティブズームが使えるか
+let currentTrack = null;
+
 sensEl.addEventListener('input', () => { sensitivity = +sensEl.value; sensValEl.textContent = sensitivity; });
 trailEl.addEventListener('input', () => { maxTrailLen = +trailEl.value; trailValEl.textContent = maxTrailLen; });
 
+// ---- ズームUI更新 ----
+function updateZoomUI(level) {
+  zoomLevel = level;
+  const disp = level.toFixed(1);
+  zoomVal.textContent = disp;
+  zoomHudVal.textContent = disp;
+  zoomRange.value = Math.round(level * 100);
+  zoomHud.style.display = level > 1.0 ? 'block' : 'none';
+}
+
+async function applyZoom(level) {
+  level = Math.max(zoomMin, Math.min(zoomMax, level));
+  if (nativeZoomSupported && currentTrack) {
+    try {
+      await currentTrack.applyConstraints({ advanced: [{ zoom: level }] });
+    } catch(e) {}
+  }
+  updateZoomUI(level);
+}
+
+zoomRange.addEventListener('input', () => {
+  applyZoom(+zoomRange.value / 100);
+});
+
+btnZoomIn.addEventListener('click', () => {
+  applyZoom(Math.min(zoomMax, zoomLevel + 0.5));
+});
+btnZoomOut.addEventListener('click', () => {
+  applyZoom(Math.max(zoomMin, zoomLevel - 0.5));
+});
+btnZoomReset.addEventListener('click', () => {
+  applyZoom(1.0);
+});
+
+// ピンチズーム（タッチ操作）
+let lastPinchDist = null;
+const canvasWrap = document.getElementById('canvas-wrap');
+canvasWrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) lastPinchDist = getPinchDist(e.touches);
+}, { passive: true });
+canvasWrap.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && lastPinchDist) {
+    const dist = getPinchDist(e.touches);
+    const delta = (dist - lastPinchDist) / 200;
+    applyZoom(zoomLevel + delta);
+    lastPinchDist = dist;
+  }
+}, { passive: true });
+canvasWrap.addEventListener('touchend', () => { lastPinchDist = null; });
+
+function getPinchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+// ---- カメラ起動 ----
 btnStart.addEventListener('click', async () => {
   errorEl.style.display = 'none';
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     vid.srcObject = stream;
     await vid.play();
+
+    // ズーム対応チェック
+    currentTrack = stream.getVideoTracks()[0];
+    const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
+    if (caps.zoom) {
+      nativeZoomSupported = true;
+      zoomMin = caps.zoom.min || 1.0;
+      zoomMax = caps.zoom.max || 10.0;
+      zoomRange.min = Math.round(zoomMin * 100);
+      zoomRange.max = Math.round(zoomMax * 100);
+      zoomModeNote.textContent = 'ネイティブズーム対応';
+      zoomModeNote.style.color = '#27ae60';
+    } else {
+      nativeZoomSupported = false;
+      zoomMin = 1.0;
+      zoomMax = 10.0;
+      zoomRange.min = 100;
+      zoomRange.max = 1000;
+      zoomModeNote.textContent = 'デジタルズーム';
+      zoomModeNote.style.color = '#888';
+    }
+    zoomRow.classList.add('visible');
+    updateZoomUI(1.0);
+
     btnStart.disabled = true;
     btnStop.disabled = false;
     btnShot.disabled = false;
@@ -274,10 +428,15 @@ btnStart.addEventListener('click', async () => {
   }
 });
 
+// ---- カメラ停止 ----
 btnStop.addEventListener('click', () => {
   if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
   if (animId) { cancelAnimationFrame(animId); animId = null; }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  currentTrack = null;
+  zoomRow.classList.remove('visible');
+  zoomHud.style.display = 'none';
+  updateZoomUI(1.0);
   btnStart.disabled = false;
   btnStop.disabled = true;
   btnShot.disabled = true;
@@ -292,6 +451,7 @@ btnStop.addEventListener('click', () => {
   drawStandby();
 });
 
+// ---- スクリーンショット ----
 btnShot.addEventListener('click', () => {
   flash.style.opacity = '0.8';
   setTimeout(() => { flash.style.opacity = '0'; }, 120);
@@ -301,6 +461,7 @@ btnShot.addEventListener('click', () => {
   autoDownload(dataUrl, 'shot_' + ts + '.png');
 });
 
+// ---- 録画 ----
 btnRec.addEventListener('click', () => {
   if (!stream) return;
   recordedChunks = [];
@@ -362,30 +523,24 @@ function addGalleryItem(url, type, filename, blob) {
   galleryTitle.style.display = 'block';
   const item = document.createElement('div');
   item.className = 'gallery-item';
-
   const badge = document.createElement('div');
   badge.className = 'type-badge ' + (type === 'image' ? 'badge-shot' : 'badge-rec');
   badge.textContent = type === 'image' ? 'SHOT' : 'REC';
   item.appendChild(badge);
-
   if (type === 'image') {
     const img = document.createElement('img');
     img.src = url;
     item.appendChild(img);
   } else {
     const v = document.createElement('video');
-    v.src = url;
-    v.controls = true;
-    v.loop = true;
+    v.src = url; v.controls = true; v.loop = true;
     item.appendChild(v);
   }
-
   const dlBtn = document.createElement('button');
   dlBtn.className = 'dl-btn';
   dlBtn.textContent = '\u2193 保存';
   dlBtn.addEventListener('click', () => {
-    if (blob) { autoDownloadBlob(blob, filename); }
-    else { autoDownload(url, filename); }
+    blob ? autoDownloadBlob(blob, filename) : autoDownload(url, filename);
   });
   item.appendChild(dlBtn);
   galleryGrid.prepend(item);
@@ -395,25 +550,19 @@ function autoDownload(dataUrl, filename) {
   const a = document.createElement('a');
   a.href = dataUrl; a.download = filename; a.click();
 }
-
 function autoDownloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-
 function timestamp() {
   const d = new Date();
-  return [d.getFullYear(),
-    String(d.getMonth()+1).padStart(2,'0'),
-    String(d.getDate()).padStart(2,'0'),
-    String(d.getHours()).padStart(2,'0'),
-    String(d.getMinutes()).padStart(2,'0'),
-    String(d.getSeconds()).padStart(2,'0')
-  ].join('');
+  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0'),
+    String(d.getHours()).padStart(2,'0'), String(d.getMinutes()).padStart(2,'0'), String(d.getSeconds()).padStart(2,'0')].join('');
 }
 
+// ---- メインループ ----
 function resize() {
   const wrap = canvas.parentElement;
   canvas.width = wrap.clientWidth;
@@ -430,19 +579,28 @@ function drawStandby() {
 function loop() {
   resize();
   if (!vid.videoWidth) { animId = requestAnimationFrame(loop); return; }
+
   const W = canvas.width, H = canvas.height;
   const vw = vid.videoWidth, vh = vid.videoHeight;
 
+  // デジタルズーム: 中央をクロップして拡大描画
+  const z = nativeZoomSupported ? 1.0 : zoomLevel;
+  const cropW = vw / z;
+  const cropH = vh / z;
+  const cropX = (vw - cropW) / 2;
+  const cropY = (vh - cropH) / 2;
+
   ctx.save();
   ctx.scale(-1, 1);
-  ctx.drawImage(vid, -W, 0, W, H);
+  ctx.drawImage(vid, cropX, cropY, cropW, cropH, -W, 0, W, H);
   ctx.restore();
 
+  // 差分検出用バッファ（ズーム適用後の映像で検出）
   const offscreen = document.createElement('canvas');
-  offscreen.width = Math.floor(vw / 4);
-  offscreen.height = Math.floor(vh / 4);
+  offscreen.width = Math.floor(cropW / 4);
+  offscreen.height = Math.floor(cropH / 4);
   const oc = offscreen.getContext('2d');
-  oc.drawImage(vid, 0, 0, offscreen.width, offscreen.height);
+  oc.drawImage(vid, cropX, cropY, cropW, cropH, 0, 0, offscreen.width, offscreen.height);
   const cur = oc.getImageData(0, 0, offscreen.width, offscreen.height);
 
   let detectedPoints = [];
@@ -501,28 +659,23 @@ function loop() {
       ctx.lineTo(t[i].x, t[i].y);
       ctx.strokeStyle = 'rgba(226,75,74,' + (alpha * 0.9) + ')';
       ctx.lineWidth = 1.5 + alpha * 2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
       ctx.stroke();
     }
     const tip = t[t.length - 1];
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff3333';
-    ctx.fill();
+    ctx.fillStyle = '#ff3333'; ctx.fill();
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, 11, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,60,60,0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,60,60,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
   });
 
   frameCount++;
   const now = performance.now();
   if (now - lastFpsTime > 1000) {
     currentFps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
-    frameCount = 0;
-    lastFpsTime = now;
+    frameCount = 0; lastFpsTime = now;
     fpsEl.textContent = currentFps;
   }
   objCountEl.textContent = clusters.length;
