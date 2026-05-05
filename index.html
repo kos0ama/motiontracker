@@ -23,18 +23,20 @@
       margin-bottom: 14px;
       text-transform: uppercase;
     }
-    #controls {
+    .control-row {
       display: flex;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 8px;
+      margin-bottom: 8px;
       align-items: center;
       flex-wrap: wrap;
       justify-content: center;
+      width: 100%;
+      max-width: 720px;
     }
     button {
       font-family: 'Courier New', monospace;
       font-size: 12px;
-      padding: 7px 16px;
+      padding: 7px 14px;
       border: 1px solid #444;
       border-radius: 6px;
       background: #1a1a1a;
@@ -44,7 +46,11 @@
     }
     button:hover:not(:disabled) { background: #2a2a2a; color: #fff; }
     button:disabled { opacity: 0.4; cursor: default; }
-    button.active { background: #c0392b; color: #fff; border-color: #e74c3c; }
+    button.active-cam { background: #c0392b; color: #fff; border-color: #e74c3c; }
+    button.active-rec { background: #8e44ad; color: #fff; border-color: #9b59b6; animation: pulse 1.2s infinite; }
+    button.btn-shot { border-color: #2980b9; color: #5dade2; }
+    button.btn-shot:hover:not(:disabled) { background: #1a2a3a; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
     label {
       font-size: 12px;
       color: #888;
@@ -53,7 +59,8 @@
       gap: 6px;
     }
     input[type=range] { width: 80px; accent-color: #e74c3c; }
-    #status { font-size: 11px; color: #666; margin-left: 8px; }
+    #status { font-size: 11px; color: #666; }
+    #recTimer { font-size: 11px; color: #9b59b6; display: none; letter-spacing: 0.08em; }
     #canvas-wrap {
       position: relative;
       border: 1px solid #2a2a2a;
@@ -80,6 +87,24 @@
       letter-spacing: 0.1em;
       pointer-events: none;
     }
+    #recHud {
+      position: absolute;
+      top: 10px; right: 12px;
+      font-size: 11px;
+      color: #9b59b6;
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      display: none;
+    }
+    #flash {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.05s;
+      border-radius: 10px;
+    }
     #info {
       margin-top: 10px;
       font-size: 11px;
@@ -99,13 +124,37 @@
       line-height: 1.6;
       display: none;
     }
+    #gallery { margin-top: 16px; width: 100%; max-width: 720px; }
+    #galleryTitle { font-size: 11px; color: #555; margin-bottom: 8px; letter-spacing: 0.08em; display: none; }
+    #galleryGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+    .gallery-item {
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #2a2a2a;
+      background: #111;
+    }
+    .gallery-item img, .gallery-item video {
+      width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover;
+    }
+    .dl-btn {
+      position: absolute; bottom: 4px; right: 4px;
+      font-size: 10px; padding: 3px 8px; border-radius: 4px;
+      background: rgba(0,0,0,0.75); border: 1px solid #444; color: #ccc; cursor: pointer;
+    }
+    .type-badge {
+      position: absolute; top: 4px; left: 4px;
+      font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em;
+    }
+    .badge-shot { background: rgba(41,128,185,0.85); color: #aee; }
+    .badge-rec  { background: rgba(142,68,173,0.85); color: #dbd; }
   </style>
 </head>
 <body>
 
-<h1>▶ Motion Tracker</h1>
+<h1>&#9654; Motion Tracker</h1>
 
-<div id="controls">
+<div class="control-row">
   <button id="btnStart">カメラ起動</button>
   <button id="btnStop" disabled>停止</button>
   <label>感度
@@ -119,10 +168,19 @@
   <span id="status">待機中</span>
 </div>
 
+<div class="control-row">
+  <button id="btnShot" disabled class="btn-shot">&#128247; スクリーンショット</button>
+  <button id="btnRec" disabled>&#9210; 録画開始</button>
+  <button id="btnRecStop" disabled>&#9209; 録画停止</button>
+  <span id="recTimer">&#9210; 00:00</span>
+</div>
+
 <div id="canvas-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
   <div id="hud">● REC</div>
+  <div id="recHud">&#9210; REC</div>
+  <div id="flash"></div>
 </div>
 
 <div id="info">
@@ -133,12 +191,20 @@
 
 <div id="error"></div>
 
+<div id="gallery">
+  <div id="galleryTitle">SAVED FILES</div>
+  <div id="galleryGrid"></div>
+</div>
+
 <script>
 const vid = document.getElementById('vid');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const btnStart = document.getElementById('btnStart');
 const btnStop = document.getElementById('btnStop');
+const btnShot = document.getElementById('btnShot');
+const btnRec = document.getElementById('btnRec');
+const btnRecStop = document.getElementById('btnRecStop');
 const statusEl = document.getElementById('status');
 const sensEl = document.getElementById('sens');
 const sensValEl = document.getElementById('sensVal');
@@ -148,7 +214,12 @@ const objCountEl = document.getElementById('objCount');
 const maxSpeedEl = document.getElementById('maxSpeed');
 const fpsEl = document.getElementById('fps');
 const hud = document.getElementById('hud');
+const recHud = document.getElementById('recHud');
+const flash = document.getElementById('flash');
+const recTimerEl = document.getElementById('recTimer');
 const errorEl = document.getElementById('error');
+const galleryTitle = document.getElementById('galleryTitle');
+const galleryGrid = document.getElementById('galleryGrid');
 
 let stream = null;
 let animId = null;
@@ -160,14 +231,13 @@ let frameCount = 0;
 let lastFpsTime = performance.now();
 let currentFps = 0;
 
-sensEl.addEventListener('input', () => {
-  sensitivity = +sensEl.value;
-  sensValEl.textContent = sensitivity;
-});
-trailEl.addEventListener('input', () => {
-  maxTrailLen = +trailEl.value;
-  trailValEl.textContent = maxTrailLen;
-});
+let mediaRecorder = null;
+let recordedChunks = [];
+let recStartTime = null;
+let recTimerInterval = null;
+
+sensEl.addEventListener('input', () => { sensitivity = +sensEl.value; sensValEl.textContent = sensitivity; });
+trailEl.addEventListener('input', () => { maxTrailLen = +trailEl.value; trailValEl.textContent = maxTrailLen; });
 
 btnStart.addEventListener('click', async () => {
   errorEl.style.display = 'none';
@@ -179,7 +249,9 @@ btnStart.addEventListener('click', async () => {
     await vid.play();
     btnStart.disabled = true;
     btnStop.disabled = false;
-    btnStop.classList.add('active');
+    btnShot.disabled = false;
+    btnRec.disabled = false;
+    btnStop.classList.add('active-cam');
     statusEl.textContent = '追跡中...';
     hud.style.color = '#ff3333';
     prevFrame = null;
@@ -190,7 +262,7 @@ btnStart.addEventListener('click', async () => {
   } catch(e) {
     let msg = 'カメラにアクセスできませんでした。';
     if (e.name === 'NotAllowedError') {
-      msg += '<br>ブラウザのアドレスバー左の🔒アイコン→「カメラ」→「許可」に変更してページをリロードしてください。';
+      msg += '<br>ブラウザのアドレスバー左のアイコン→「カメラ」→「許可」に変更してページをリロードしてください。';
     } else if (e.name === 'NotFoundError') {
       msg += '<br>カメラデバイスが見つかりません。';
     } else {
@@ -203,11 +275,15 @@ btnStart.addEventListener('click', async () => {
 });
 
 btnStop.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
   if (animId) { cancelAnimationFrame(animId); animId = null; }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   btnStart.disabled = false;
   btnStop.disabled = true;
-  btnStop.classList.remove('active');
+  btnShot.disabled = true;
+  btnRec.disabled = true;
+  btnRecStop.disabled = true;
+  btnStop.classList.remove('active-cam');
   statusEl.textContent = '停止';
   hud.style.color = '#444';
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -215,6 +291,128 @@ btnStop.addEventListener('click', () => {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   drawStandby();
 });
+
+btnShot.addEventListener('click', () => {
+  flash.style.opacity = '0.8';
+  setTimeout(() => { flash.style.opacity = '0'; }, 120);
+  const ts = timestamp();
+  const dataUrl = canvas.toDataURL('image/png');
+  addGalleryItem(dataUrl, 'image', 'shot_' + ts + '.png', null);
+  autoDownload(dataUrl, 'shot_' + ts + '.png');
+});
+
+btnRec.addEventListener('click', () => {
+  if (!stream) return;
+  recordedChunks = [];
+  const canvasStream = canvas.captureStream(30);
+  const mimeType = getSupportedMimeType();
+  try {
+    mediaRecorder = new MediaRecorder(canvasStream, mimeType ? { mimeType } : {});
+  } catch(e) {
+    mediaRecorder = new MediaRecorder(canvasStream);
+  }
+  mediaRecorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+  };
+  mediaRecorder.onstop = () => {
+    const mType = mediaRecorder.mimeType || 'video/webm';
+    const ext = mType.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(recordedChunks, { type: mType });
+    const url = URL.createObjectURL(blob);
+    const ts = timestamp();
+    addGalleryItem(url, 'video', 'rec_' + ts + '.' + ext, blob);
+  };
+  mediaRecorder.start(100);
+  recStartTime = Date.now();
+  recTimerEl.style.display = 'inline';
+  recTimerInterval = setInterval(updateRecTimer, 500);
+  recHud.style.display = 'block';
+  btnRec.disabled = true;
+  btnRecStop.disabled = false;
+  btnRecStop.classList.add('active-rec');
+  statusEl.textContent = '録画中...';
+});
+
+btnRecStop.addEventListener('click', stopRecording);
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(recTimerInterval);
+  recTimerEl.style.display = 'none';
+  recHud.style.display = 'none';
+  btnRec.disabled = false;
+  btnRecStop.disabled = true;
+  btnRecStop.classList.remove('active-rec');
+  statusEl.textContent = '追跡中...';
+}
+
+function updateRecTimer() {
+  const sec = Math.floor((Date.now() - recStartTime) / 1000);
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  recTimerEl.textContent = '\u23FA ' + m + ':' + s;
+}
+
+function getSupportedMimeType() {
+  const types = ['video/mp4', 'video/webm;codecs=h264', 'video/webm;codecs=vp9', 'video/webm'];
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+function addGalleryItem(url, type, filename, blob) {
+  galleryTitle.style.display = 'block';
+  const item = document.createElement('div');
+  item.className = 'gallery-item';
+
+  const badge = document.createElement('div');
+  badge.className = 'type-badge ' + (type === 'image' ? 'badge-shot' : 'badge-rec');
+  badge.textContent = type === 'image' ? 'SHOT' : 'REC';
+  item.appendChild(badge);
+
+  if (type === 'image') {
+    const img = document.createElement('img');
+    img.src = url;
+    item.appendChild(img);
+  } else {
+    const v = document.createElement('video');
+    v.src = url;
+    v.controls = true;
+    v.loop = true;
+    item.appendChild(v);
+  }
+
+  const dlBtn = document.createElement('button');
+  dlBtn.className = 'dl-btn';
+  dlBtn.textContent = '\u2193 保存';
+  dlBtn.addEventListener('click', () => {
+    if (blob) { autoDownloadBlob(blob, filename); }
+    else { autoDownload(url, filename); }
+  });
+  item.appendChild(dlBtn);
+  galleryGrid.prepend(item);
+}
+
+function autoDownload(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.href = dataUrl; a.download = filename; a.click();
+}
+
+function autoDownloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function timestamp() {
+  const d = new Date();
+  return [d.getFullYear(),
+    String(d.getMonth()+1).padStart(2,'0'),
+    String(d.getDate()).padStart(2,'0'),
+    String(d.getHours()).padStart(2,'0'),
+    String(d.getMinutes()).padStart(2,'0'),
+    String(d.getSeconds()).padStart(2,'0')
+  ].join('');
+}
 
 function resize() {
   const wrap = canvas.parentElement;
@@ -232,17 +430,14 @@ function drawStandby() {
 function loop() {
   resize();
   if (!vid.videoWidth) { animId = requestAnimationFrame(loop); return; }
-
   const W = canvas.width, H = canvas.height;
   const vw = vid.videoWidth, vh = vid.videoHeight;
 
-  // ミラー描画
   ctx.save();
   ctx.scale(-1, 1);
   ctx.drawImage(vid, -W, 0, W, H);
   ctx.restore();
 
-  // 差分検出用の小さいバッファ
   const offscreen = document.createElement('canvas');
   offscreen.width = Math.floor(vw / 4);
   offscreen.height = Math.floor(vh / 4);
@@ -251,28 +446,20 @@ function loop() {
   const cur = oc.getImageData(0, 0, offscreen.width, offscreen.height);
 
   let detectedPoints = [];
-
   if (prevFrame) {
-    const curD = cur.data;
-    const prevD = prevFrame.data;
+    const curD = cur.data, prevD = prevFrame.data;
     const ow = offscreen.width, oh = offscreen.height;
     const cellSize = 8;
-    const cols = Math.floor(ow / cellSize);
-    const rows = Math.floor(oh / cellSize);
-
+    const cols = Math.floor(ow / cellSize), rows = Math.floor(oh / cellSize);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         let diffSum = 0, count = 0;
         for (let dy = 0; dy < cellSize; dy++) {
           for (let dx = 0; dx < cellSize; dx++) {
-            const px = c * cellSize + dx;
-            const py = r * cellSize + dy;
+            const px = c * cellSize + dx, py = r * cellSize + dy;
             if (px >= ow || py >= oh) continue;
             const i = (py * ow + px) * 4;
-            const dr = Math.abs(curD[i] - prevD[i]);
-            const dg = Math.abs(curD[i+1] - prevD[i+1]);
-            const db = Math.abs(curD[i+2] - prevD[i+2]);
-            diffSum += (dr + dg + db) / 3;
+            diffSum += (Math.abs(curD[i]-prevD[i]) + Math.abs(curD[i+1]-prevD[i+1]) + Math.abs(curD[i+2]-prevD[i+2])) / 3;
             count++;
           }
         }
@@ -287,7 +474,6 @@ function loop() {
   prevFrame = cur;
 
   const clusters = clusterPoints(detectedPoints, W * 0.08);
-
   while (trails.length < clusters.length) trails.push([]);
   while (trails.length > clusters.length + 2) trails.pop();
 
@@ -308,27 +494,22 @@ function loop() {
 
   trails.forEach(t => {
     if (t.length < 2) return;
-
-    // グラデーション軌跡（古い→新しい）
     for (let i = 1; i < t.length; i++) {
       const alpha = i / t.length;
       ctx.beginPath();
       ctx.moveTo(t[i-1].x, t[i-1].y);
       ctx.lineTo(t[i].x, t[i].y);
-      ctx.strokeStyle = `rgba(226,75,74,${alpha * 0.9})`;
+      ctx.strokeStyle = 'rgba(226,75,74,' + (alpha * 0.9) + ')';
       ctx.lineWidth = 1.5 + alpha * 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.stroke();
     }
-
     const tip = t[t.length - 1];
-    // 先端の点
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#ff3333';
     ctx.fill();
-    // 外リング
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, 11, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255,60,60,0.35)';
@@ -336,7 +517,6 @@ function loop() {
     ctx.stroke();
   });
 
-  // FPS 計算
   frameCount++;
   const now = performance.now();
   if (now - lastFpsTime > 1000) {
@@ -347,7 +527,6 @@ function loop() {
   }
   objCountEl.textContent = clusters.length;
   maxSpeedEl.textContent = Math.round(maxSpd);
-
   animId = requestAnimationFrame(loop);
 }
 
@@ -361,19 +540,14 @@ function clusterPoints(pts, radius) {
     visited[i] = true;
     for (let j = i+1; j < pts.length; j++) {
       if (visited[j]) continue;
-      const dx = pts[j].x - pts[i].x;
-      const dy = pts[j].y - pts[i].y;
-      if (Math.sqrt(dx*dx + dy*dy) < radius) {
-        cx += pts[j].x; cy += pts[j].y; cnt++;
-        visited[j] = true;
-      }
+      const dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
+      if (Math.sqrt(dx*dx + dy*dy) < radius) { cx += pts[j].x; cy += pts[j].y; cnt++; visited[j] = true; }
     }
     clusters.push({ x: cx/cnt, y: cy/cnt });
   }
   return clusters;
 }
 
-// 初期表示
 resize();
 ctx.fillStyle = '#111';
 ctx.fillRect(0, 0, canvas.width, canvas.height);
