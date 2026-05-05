@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Motion Tracker Pro - Golf Edition</title>
+  <title>AI Sphere Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <style>
-    /* 既存のスタイルを継承 */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f0f0f; color: #eee; font-family: 'Courier New', monospace; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
     h1 { font-size: 16px; letter-spacing: 0.15em; color: #ff4444; margin-bottom: 14px; text-transform: uppercase; }
@@ -15,53 +14,49 @@
     button { font-family: 'Courier New', monospace; font-size: 11px; padding: 7px 12px; border: 1px solid #444; border-radius: 6px; background: #1a1a1a; color: #ccc; cursor: pointer; }
     button:disabled { opacity: 0.4; }
     button.active-cam { background: #c0392b; color: #fff; }
-    button.active-rec { background: #8e44ad; color: #fff; animation: pulse 1.2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
     select, input[type=range] { background: #1a1a1a; color: #ccc; border: 1px solid #444; border-radius: 4px; font-size: 11px; }
     label { font-size: 10px; color: #888; display: flex; align-items: center; gap: 4px; }
     #canvas-wrap { position: relative; border: 1px solid #2a2a2a; border-radius: 10px; overflow: hidden; width: 100%; max-width: 720px; aspect-ratio: 4/3; }
     #vid, #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
     #vid { opacity: 0; }
-    #hud, #recHud, #zoomHud { position: absolute; font-size: 10px; pointer-events: none; }
+    #hud, #recHud { position: absolute; font-size: 10px; pointer-events: none; }
     #hud { top: 10px; left: 12px; color: #ff4444; }
-    #zoomHud { top: 10px; left: 50%; transform: translateX(-50%); color: #7dcea0; display: none; }
     #recHud { top: 10px; right: 12px; color: #9b59b6; display: none; }
     #galleryGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 15px; width: 100%; max-width: 720px; }
-    .gallery-item { position: relative; border: 1px solid #2a2a2a; border-radius: 6px; overflow: hidden; }
-    .gallery-item img, .gallery-item video { width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover; }
+    .gallery-item { border: 1px solid #2a2a2a; border-radius: 6px; overflow: hidden; }
+    .gallery-item img, .gallery-item video { width: 100%; display: block; }
   </style>
 </head>
 <body>
 
-<h1>▶ AI Tracker (Person/Car/Bike/Golf)</h1>
+<h1>▶ AI Sphere Tracker</h1>
 
 <div class="control-row">
   <select id="camSelect"><option>Loading...</option></select>
   <button id="btnStart">START</button>
   <button id="btnStop" disabled>STOP</button>
-  <label>軌跡<input type="range" id="trail" min="5" max="150" value="50"></label>
-  <label>AI感度<input type="range" id="threshold" min="10" max="90" value="40" title="低いほど小さな物体を検知"></label>
+  <label>軌跡<input type="range" id="trail" min="5" max="150" value="60"></label>
+  <label>感度<input type="range" id="threshold" min="5" max="90" value="25"></label>
 </div>
 
 <div class="control-row">
   <button id="btnShot" disabled style="color:#5dade2;">📸 SHOT</button>
   <button id="btnRec" disabled>⏺ REC</button>
   <button id="btnRecStop" disabled>⏹ STOP</button>
-  <span id="recTimer" style="display:none; color:#9b59b6; font-size:11px;">00:00</span>
 </div>
 
 <div class="control-row" id="zoomRow" style="display:none;">
   <span style="font-size:11px; color:#7dcea0;">ZOOM ×<span id="zoomVal">1.0</span></span>
   <button id="btnZoomOut">－</button>
-  <input type="range" id="zoomRange" min="100" max="1000" value="100">
+  <input type="range" id="zoomRange" min="100" max="800" value="100">
   <button id="btnZoomIn">＋</button>
+  <span id="mirrorMode" style="font-size: 9px; margin-left: 10px; color: #888;"></span>
 </div>
 
 <div id="canvas-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
-  <div id="hud">AI TRACKING ACTIVE</div>
-  <div id="zoomHud">🔍 ×<span id="zoomHudVal">1.0</span></div>
+  <div id="hud">AI TRACKING</div>
   <div id="recHud">⏺ REC</div>
 </div>
 
@@ -88,13 +83,14 @@ let zoomLevel = 1.0;
 let currentTrack = null;
 let mediaRecorder = null;
 let recordedChunks = [];
+let isFrontCamera = true; // 反転判定フラグ
 
-// 分類マップ
+// ターゲット定義
 const TARGET_MAP = {
   'person': 'Person',
   'car': 'Car',
   'bicycle': 'Bicycle',
-  'sports ball': 'Golf Ball' // ゴルフボールとして表示
+  'sports ball': 'Sphere' // ゴルフボールを含む球体
 };
 
 async function init() {
@@ -112,7 +108,13 @@ btnStart.addEventListener('click', async () => {
     });
     vid.srcObject = stream;
     await vid.play();
+    
     currentTrack = stream.getVideoTracks()[0];
+    const settings = currentTrack.getSettings();
+    // カメラの向きを判定
+    isFrontCamera = settings.facingMode === 'user' || (settings.label && settings.label.toLowerCase().includes('front'));
+    document.getElementById('mirrorMode').textContent = isFrontCamera ? "Mirror: ON" : "Mirror: OFF";
+    
     document.getElementById('zoomRow').style.display = 'flex';
     btnStart.disabled = true; btnStop.disabled = false;
     btnShot.disabled = false; btnRec.disabled = false;
@@ -125,21 +127,31 @@ async function loop() {
   const H = canvas.height = canvas.parentElement.clientHeight;
   const thresh = thresholdEl.value / 100;
 
-  // デジタルズーム描画
-  const z = (currentTrack && currentTrack.getCapabilities().zoom) ? 1.0 : zoomLevel;
+  // デジタルズーム計算[cite: 1]
+  const caps = currentTrack ? currentTrack.getCapabilities() : {};
+  const useNativeZoom = !!caps.zoom;
+  const z = useNativeZoom ? 1.0 : zoomLevel;
   const sw = vid.videoWidth / z, sh = vid.videoHeight / z;
   const sx = (vid.videoWidth - sw) / 2, sy = (vid.videoHeight - sh) / 2;
 
   ctx.save();
-  ctx.scale(-1, 1);
-  ctx.drawImage(vid, sx, sy, sw, sh, -W, 0, W, H);
+  if (isFrontCamera) {
+    // フロントカメラ：鏡像表示
+    ctx.scale(-1, 1);
+    ctx.drawImage(vid, sx, sy, sw, sh, -W, 0, W, H);
+  } else {
+    // バックカメラ：レンズの向き通り（反転なし）
+    ctx.scale(1, 1);
+    ctx.drawImage(vid, sx, sy, sw, sh, 0, 0, W, H);
+  }
   ctx.restore();
 
-  // AI解析（フィルタリング）
+  // AI解析（ズームされたキャンバス映像を解析することで小さな球体も検知しやすくする）
   const predictions = await model.detect(canvas);
   const detected = predictions.filter(p => TARGET_MAP[p.class] && p.score > thresh);
 
   detected.forEach((p, i) => {
+    // 座標の計算
     const x = p.bbox[0] + p.bbox[2]/2;
     const y = p.bbox[1] + p.bbox[3]/2;
     const label = TARGET_MAP[p.class];
@@ -149,8 +161,8 @@ async function loop() {
     trails[id].push({x, y});
     if (trails[id].length > document.getElementById('trail').value) trails[id].shift();
 
-    // 軌跡の描画
-    ctx.strokeStyle = label === 'Golf Ball' ? '#ffff00' : '#ff4444'; // ゴルフは黄色で見やすく
+    // 描画（キャンバス座標で直接描画）
+    ctx.strokeStyle = label === 'Sphere' ? '#ffff00' : '#ff4444';
     ctx.lineWidth = 2;
     ctx.beginPath();
     trails[id].forEach((pt, idx) => idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
@@ -158,30 +170,30 @@ async function loop() {
 
     ctx.fillStyle = ctx.strokeStyle;
     ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.fillText(label, x + 5, y - 5);
+    ctx.fillStyle = '#fff'; ctx.font = "10px Arial";
+    ctx.fillText(label, x + 5, y - 5);
   });
 
   animId = requestAnimationFrame(loop);
 }
 
-// ズーム/録画/ショット機能 (前回同様の実装)[cite: 1]
+// ズーム機能[cite: 1]
 function updateZoom(v) {
   zoomLevel = v;
-  document.getElementById('zoomVal').textContent = document.getElementById('zoomHudVal').textContent = v.toFixed(1);
-  document.getElementById('zoomHud').style.display = v > 1.0 ? 'block' : 'none';
+  document.getElementById('zoomVal').textContent = v.toFixed(1);
   if (currentTrack && currentTrack.getCapabilities().zoom) {
     currentTrack.applyConstraints({ advanced: [{ zoom: v }] });
   }
 }
 zoomRange.oninput = () => updateZoom(zoomRange.value / 100);
-document.getElementById('btnZoomIn').onclick = () => updateZoom(Math.min(10, zoomLevel + 0.5));
+document.getElementById('btnZoomIn').onclick = () => updateZoom(Math.min(8, zoomLevel + 0.5));
 document.getElementById('btnZoomOut').onclick = () => updateZoom(Math.max(1, zoomLevel - 0.5));
 
+// ショット・録画[cite: 1]
 btnShot.onclick = () => {
   const a = document.createElement('a'); a.href = canvas.toDataURL();
-  a.download = `shot_${Date.now()}.png`; a.click();
+  a.download = `capture_${Date.now()}.png`; a.click();
 };
-
 btnRec.onclick = () => {
   recordedChunks = [];
   mediaRecorder = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm' });
@@ -196,11 +208,7 @@ btnRec.onclick = () => {
   btnRec.disabled = true; btnRecStop.disabled = false;
   document.getElementById('recHud').style.display = 'block';
 };
-btnRecStop.onclick = () => {
-  mediaRecorder.stop();
-  btnRec.disabled = false; btnRecStop.disabled = true;
-  document.getElementById('recHud').style.display = 'none';
-};
+btnRecStop.onclick = () => { mediaRecorder.stop(); btnRec.disabled = false; btnRecStop.disabled = true; document.getElementById('recHud').style.display = 'none'; };
 
 btnStop.onclick = () => {
   cancelAnimationFrame(animId);
