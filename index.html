@@ -33,6 +33,63 @@
     select { background: #1a1a1a; color: #ccc; border: 1px solid #444; border-radius: 4px; font-size: 11px; padding: 4px 6px; }
     input[type=range] { accent-color: #27ae60; }
 
+    /* ---- ライブ配信ボタン ---- */
+    #btnLive {
+      background: linear-gradient(135deg, #c0392b, #8e1a0e);
+      color: #fff; border-color: #e74c3c;
+      font-weight: bold; letter-spacing: 0.05em;
+    }
+    #btnLive:hover:not(:disabled) { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+
+    /* ---- ライブ配信モーダル ---- */
+    #liveModal {
+      display: none;
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.85);
+      align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    #liveModal.open { display: flex; }
+    #liveModalBox {
+      background: #141414; border: 1px solid #333;
+      border-radius: 12px; padding: 24px;
+      width: 100%; max-width: 480px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    #liveModalBox h2 {
+      font-size: 14px; color: #ff4444; letter-spacing: 0.1em;
+      margin-bottom: 16px; text-transform: uppercase;
+    }
+    .live-platform {
+      border: 1px solid #2a2a2a; border-radius: 8px;
+      padding: 14px; margin-bottom: 12px;
+      background: #1a1a1a;
+    }
+    .live-platform h3 {
+      font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .live-platform h3 .icon { font-size: 16px; }
+    .live-steps {
+      font-size: 11px; color: #888; line-height: 2;
+      padding-left: 4px;
+    }
+    .live-steps li { list-style: none; padding-left: 12px; position: relative; }
+    .live-steps li::before { content: '▸'; position: absolute; left: 0; color: #555; }
+    .live-steps a {
+      color: #5dade2; text-decoration: none;
+    }
+    .live-note {
+      font-size: 10px; color: #555; margin-top: 8px;
+      padding: 8px; background: #111; border-radius: 4px; line-height: 1.6;
+    }
+    .live-note strong { color: #888; }
+    #btnLiveClose {
+      width: 100%; margin-top: 12px;
+      background: #2a2a2a; color: #aaa; border-color: #444;
+      padding: 10px;
+    }
+    #btnLiveClose:hover { background: #333; color: #fff; }
+
     /* ---- 追跡対象セレクター ---- */
     #targetPanel {
       width: 100%; max-width: 720px;
@@ -76,16 +133,25 @@
     .zoom-reset:hover:not(:disabled) { background: #1a2e22; }
     #zoomMode { font-size: 9px; color: #555; margin-top: 5px; }
 
-    /* ---- Canvas ---- */
+    /* ---- Canvas wrap ----
+       canvas の物理ピクセルサイズ = 表示サイズ に固定するため
+       wrap の clientWidth/Height を JS で毎フレーム取得して canvas に反映する。
+       aspect-ratio は CSS で維持する。
+    ---- */
     #canvas-wrap {
       position: relative; border: 1px solid #2a2a2a;
       border-radius: 10px; overflow: hidden;
-      width: 100%; max-width: 720px; aspect-ratio: 4/3; background: #111;
+      width: 100%; max-width: 720px; aspect-ratio: 16/9; background: #111;
     }
-    /* vid は非表示だが描画ソースとして使う */
-    #vid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
-    /* canvas が映像＋軌跡を合成して表示 */
-    #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+    #vid {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%; object-fit: cover;
+      opacity: 0; pointer-events: none;
+    }
+    #canvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%; display: block;
+    }
 
     /* HUD 類 */
     #recHud { position: absolute; top: 10px; right: 12px; color: #9b59b6; display: none; font-size: 10px; letter-spacing: 0.08em; }
@@ -110,6 +176,7 @@
 
 <h1>&#9654; AI & Color Tracker Pro</h1>
 
+<!-- コントロール行 -->
 <div class="control-row">
   <select id="camSelect"><option>Loading...</option></select>
   <button id="btnStart">START</button>
@@ -117,6 +184,7 @@
   <button id="btnShot" disabled style="color:#5dade2; border-color:#2980b9;">&#128247; SHOT</button>
   <button id="btnRec" disabled>&#9210; REC</button>
   <button id="btnRecStop" disabled>&#9209; STOP</button>
+  <button id="btnLive">&#128250; LIVE配信</button>
 </div>
 
 <div class="control-row">
@@ -135,11 +203,13 @@
   </label>
 </div>
 
+<!-- 追跡対象 -->
 <div id="targetPanel">
   <div class="panel-title">TRACKING TARGETS ― クリックでON/OFF（複数選択可）</div>
   <div class="target-grid" id="targetGrid"></div>
 </div>
 
+<!-- ズーム -->
 <div id="zoomPanel">
   <div class="zoom-row">
     <span class="zoom-label">ZOOM &#215;<span id="zoomVal">1.0</span></span>
@@ -151,6 +221,7 @@
   <div id="zoomMode"></div>
 </div>
 
+<!-- カメラ映像 -->
 <div id="canvas-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
@@ -161,6 +232,65 @@
 </div>
 
 <div id="galleryGrid"></div>
+
+<!-- ===== ライブ配信ガイド モーダル ===== -->
+<div id="liveModal">
+  <div id="liveModalBox">
+    <h2>&#128250; スマホ単独ライブ配信ガイド</h2>
+
+    <div class="live-platform">
+      <h3><span class="icon">&#9654;</span> YouTube Live（おすすめ）</h3>
+      <ul class="live-steps">
+        <li>① このページを <strong>Chrome for iOS/Android</strong> で開く</li>
+        <li>② カメラを起動してトラッカーを動かす</li>
+        <li>③ iOSなら <strong>ReStream</strong> アプリをインストール</li>
+        <li>④ Restreamで「画面収録配信」を選択</li>
+        <li>⑤ YouTubeアカウントを接続して配信開始</li>
+        <li>⑥ iOSコントロールセンターの●画面収録をタップ</li>
+        <li>→ このアプリ画面がそのまま配信されます</li>
+      </ul>
+      <div class="live-note">
+        <strong>iOS</strong>: 設定 → コントロールセンター → 画面収録 を追加しておく<br>
+        <strong>Android</strong>: <a href="https://play.google.com/store/apps/details?id=com.streamlabs.slobs" target="_blank">Streamlabs</a> アプリの「画面配信」機能を使用
+      </div>
+    </div>
+
+    <div class="live-platform">
+      <h3><span class="icon">&#128247;</span> Instagram Live</h3>
+      <ul class="live-steps">
+        <li>① <a href="https://apps.apple.com/app/restream/id1474010800" target="_blank">Restream</a> または <a href="https://streamlabs.com" target="_blank">Streamlabs</a> アプリをインストール</li>
+        <li>② Instagramアカウントを接続</li>
+        <li>③「画面を共有」でこのブラウザタブを選択</li>
+        <li>④ 配信開始ボタンをタップ</li>
+      </ul>
+      <div class="live-note">
+        InstagramはAPIの制限でWebからの直接RTMP配信が不可。<br>
+        <strong>Restream / Streamlabs</strong> が最もかんたんな迂回手段です。
+      </div>
+    </div>
+
+    <div class="live-platform">
+      <h3><span class="icon">&#9889;</span> 最速：iOS 画面収録をそのまま配信</h3>
+      <ul class="live-steps">
+        <li>① <a href="https://apps.apple.com/app/restream/id1474010800" target="_blank">Restream</a> アプリをインストール・ログイン</li>
+        <li>② Restreamで配信先（YouTube/Instagram）を設定</li>
+        <li>③ Restream内で「Go Live → 画面」を選択</li>
+        <li>④ このブラウザでトラッカーを起動した状態で</li>
+        <li>⑤ 画面収録 → Restream を選んで開始</li>
+      </ul>
+      <div class="live-note">
+        <strong>無料</strong>で YouTube + Instagram に同時配信可能。ウォーターマークあり（有料版で削除）。
+      </div>
+    </div>
+
+    <div class="live-note" style="margin-top:4px; font-size:10px; color:#444;">
+      ブラウザのみでRTMP直接配信は現時点でスマホOSの制限により技術的に不可能です。
+      上記アプリを経由することで実現できます。
+    </div>
+
+    <button id="btnLiveClose">閉じる</button>
+  </div>
+</div>
 
 <script>
 // =====================================================
@@ -176,6 +306,9 @@ const btnStop      = document.getElementById('btnStop');
 const btnShot      = document.getElementById('btnShot');
 const btnRec       = document.getElementById('btnRec');
 const btnRecStop   = document.getElementById('btnRecStop');
+const btnLive      = document.getElementById('btnLive');
+const liveModal    = document.getElementById('liveModal');
+const btnLiveClose = document.getElementById('btnLiveClose');
 const zoomRange    = document.getElementById('zoomRange');
 const zoomPanel    = document.getElementById('zoomPanel');
 const zoomHud      = document.getElementById('zoomHud');
@@ -184,6 +317,14 @@ const trailSlider  = document.getElementById('trail');
 const trailValEl   = document.getElementById('trailVal');
 const modelStatus  = document.getElementById('modelStatus');
 const fpsHud       = document.getElementById('fpsHud');
+const canvasWrap   = document.getElementById('canvas-wrap');
+
+// =====================================================
+// ライブ配信モーダル
+// =====================================================
+btnLive.onclick      = () => liveModal.classList.add('open');
+btnLiveClose.onclick = () => liveModal.classList.remove('open');
+liveModal.addEventListener('click', e => { if (e.target === liveModal) liveModal.classList.remove('open'); });
 
 // =====================================================
 // 追跡対象定義
@@ -205,8 +346,8 @@ const ALL_TARGETS = [
   { key: 'bottle',        label: 'ボトル',        color: '#27ae60' },
   { key: 'COLOR_BALL',    label: 'カラーボール',  color: '#ffff00' },
 ];
-const DEFAULT_ON   = new Set(['person', 'sports ball', 'COLOR_BALL']);
-let activeTargets  = new Set(DEFAULT_ON);
+const DEFAULT_ON  = new Set(['person', 'sports ball', 'COLOR_BALL']);
+let activeTargets = new Set(DEFAULT_ON);
 
 const targetGrid = document.getElementById('targetGrid');
 ALL_TARGETS.forEach(t => {
@@ -223,7 +364,6 @@ ALL_TARGETS.forEach(t => {
 });
 
 function getTargetInfo(key) { return ALL_TARGETS.find(t => t.key === key); }
-
 trailSlider.addEventListener('input', () => { trailValEl.textContent = trailSlider.value; });
 
 // =====================================================
@@ -231,47 +371,48 @@ trailSlider.addEventListener('input', () => { trailValEl.textContent = trailSlid
 // =====================================================
 let model         = null;
 let stream        = null;
-let drawAnimId    = null;   // 描画ループ用
-let detRunning    = false;  // AI検出フラグ（重複防止）
+let drawAnimId    = null;
 let isRunning     = false;
-
 let zoomLevel     = 1.0;
 let currentTrack  = null;
 let nativeZoom    = false;
 let isFrontCamera = false;
-
 let mediaRecorder  = null;
 let recordedChunks = [];
-
-// =====================================================
-// 共有データ: AI検出結果（描画ループが参照する）
-// =====================================================
-//   detections = [ { classKey, cx, cy, bbox, color }, ... ]
 let detections = [];
-
-// 軌跡データ: trailId → [{x,y}, ...]
 let trails = {};
-
-// FPS 計測
 let fpsFrames = 0, fpsLast = performance.now();
+
+// =====================================================
+// canvas の物理サイズを wrap の表示サイズに同期する
+// ★ これが録画画角ズレの修正ポイント
+// =====================================================
+function syncCanvasSize() {
+  const rect = canvasWrap.getBoundingClientRect();
+  const W = Math.round(rect.width);
+  const H = Math.round(rect.height);
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width  = W;
+    canvas.height = H;
+  }
+  return { W, H };
+}
+
+// resize observer で wrap サイズが変わっても追従
+const resizeObs = new ResizeObserver(() => { if (!isRunning) return; syncCanvasSize(); });
+resizeObs.observe(canvasWrap);
 
 // =====================================================
 // 初期化
 // =====================================================
 async function init() {
   try {
-    // カメラ一覧（バックカメラ優先）
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cams = devices.filter(d => d.kind === 'videoinput');
-    cams.sort((a, b) => {
-      const aB = /back|rear|environment/i.test(a.label);
-      const bB = /back|rear|environment/i.test(b.label);
-      return bB - aB;
-    });
+    cams.sort((a, b) => /back|rear|environment/i.test(b.label) - /back|rear|environment/i.test(a.label));
     camSelect.innerHTML = cams.map(d =>
       `<option value="${d.deviceId}">${d.label || 'Camera ' + d.deviceId.slice(0,4)}</option>`
     ).join('');
-
     modelStatus.textContent = 'AI MODEL: Loading...';
     model = await cocoSsd.load();
     modelStatus.textContent = 'AI MODEL: Ready ✓';
@@ -287,8 +428,7 @@ init();
 // =====================================================
 btnStart.onclick = async () => {
   if (stream) stream.getTracks().forEach(t => t.stop());
-  trails = {};
-  detections = [];
+  trails = {}; detections = [];
 
   try {
     let constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
@@ -328,8 +468,11 @@ btnStart.onclick = async () => {
     isRunning = true;
     fpsLast = performance.now(); fpsFrames = 0;
 
-    drawLoop();       // 毎フレーム描画
-    detectionLoop();  // AI検出（非同期・独立）
+    // ★ 開始前に canvas サイズを確定させる
+    syncCanvasSize();
+
+    drawLoop();
+    detectionLoop();
 
   } catch(e) {
     alert('Camera Error: ' + e.message);
@@ -338,20 +481,19 @@ btnStart.onclick = async () => {
 };
 
 // =====================================================
-// 描画ループ（requestAnimationFrame で毎フレーム）
-// AI検出結果は detections[] を参照するだけ → 止まらない
+// 描画ループ
 // =====================================================
 function drawLoop() {
   if (!isRunning) return;
 
-  const W = canvas.width  = canvas.parentElement.clientWidth;
-  const H = canvas.height = canvas.parentElement.clientHeight;
+  // ★ wrap の実ピクセルに合わせて canvas を同期（毎フレーム）
+  const { W, H } = syncCanvasSize();
 
   if (!vid.videoWidth) { drawAnimId = requestAnimationFrame(drawLoop); return; }
 
-  // ---- 映像描画（デジタルズーム込み） ----
+  // 映像描画（デジタルズーム込み）
   const dz = nativeZoom ? 1.0 : zoomLevel;
-  const sw = vid.videoWidth / dz, sh = vid.videoHeight / dz;
+  const sw = vid.videoWidth / dz,  sh = vid.videoHeight / dz;
   const sx = (vid.videoWidth - sw) / 2, sy = (vid.videoHeight - sh) / 2;
 
   ctx.save();
@@ -359,12 +501,11 @@ function drawLoop() {
   else               { ctx.drawImage(vid, sx, sy, sw, sh, 0, 0, W, H); }
   ctx.restore();
 
-  // ---- カラーボール検出（軽量・毎フレーム OK） ----
+  // カラーボール検出（毎フレーム・軽量）
   if (activeTargets.has('COLOR_BALL') && ballColorSel.value !== 'none') {
-    const cb = detectBallByColor();
+    const cb = detectBallByColor(W, H);
     if (cb) {
       updateTrail('COLOR_BALL_0', cb.x, cb.y);
-      // bbox 風に小さい円枠
       const ti = getTargetInfo('COLOR_BALL');
       drawBox(cb.x - 15, cb.y - 15, 30, 30, ti.color, 'カラーボール', 1.0);
       drawTrailLines('COLOR_BALL_0', ti.color);
@@ -372,7 +513,7 @@ function drawLoop() {
     }
   }
 
-  // ---- AI検出結果の描画（前フレームの detections を使う） ----
+  // AI検出結果を描画（前フレームの detections を参照）
   const maxLen = +trailSlider.value;
   const usedIds = new Set();
 
@@ -380,24 +521,14 @@ function drawLoop() {
     if (!activeTargets.has(det.classKey)) return;
     const ti = getTargetInfo(det.classKey);
     if (!ti) return;
-
-    // 軌跡IDをバウンディングボックス近傍で継続
     const trailId = matchOrCreateTrail(det.classKey, det.cx, det.cy, idx);
     usedIds.add(trailId);
-
     updateTrail(trailId, det.cx, det.cy, maxLen);
-
-    // バウンディングボックス
     drawBox(det.bbox[0], det.bbox[1], det.bbox[2], det.bbox[3], ti.color, ti.label, det.score);
-
-    // 中心点から伸びる軌跡ライン
     drawTrailLines(trailId, ti.color);
-
-    // 先端の中心点
     drawCenterDot(det.cx, det.cy, ti.color);
   });
 
-  // 長時間使われていない軌跡を削除
   Object.keys(trails).forEach(id => {
     if (!usedIds.has(id) && !id.startsWith('COLOR_BALL')) {
       trails[id].age = (trails[id].age || 0) + 1;
@@ -405,7 +536,6 @@ function drawLoop() {
     }
   });
 
-  // FPS
   fpsFrames++;
   const now = performance.now();
   if (now - fpsLast > 1000) {
@@ -417,17 +547,13 @@ function drawLoop() {
 }
 
 // =====================================================
-// AI 検出ループ（描画とは独立。await で非同期、終わったらすぐ次を呼ぶ）
+// AI検出ループ（描画と独立）
 // =====================================================
 async function detectionLoop() {
   if (!isRunning) return;
-  if (!model || !vid.videoWidth) {
-    setTimeout(detectionLoop, 100);
-    return;
-  }
+  if (!model || !vid.videoWidth) { setTimeout(detectionLoop, 100); return; }
 
   try {
-    // canvas の現在フレームを小さい offscreen に複製して検出（本 canvas を止めない）
     const ow = 320, oh = 240;
     const off = document.createElement('canvas');
     off.width = ow; off.height = oh;
@@ -443,43 +569,28 @@ async function detectionLoop() {
       oc.drawImage(vid, sx, sy, sw, sh, 0, 0, ow, oh);
     }
 
-    // AI 検出（offscreen に対して実行）
     const preds = await model.detect(off);
 
-    // canvas の実サイズにスケール変換してから保存
+    // ★ canvas の現在サイズにスケール変換
     const W = canvas.width, H = canvas.height;
     const scaleX = W / ow, scaleY = H / oh;
 
     detections = preds
       .filter(p => activeTargets.has(p.class))
       .map(p => {
-        const bx = p.bbox[0] * scaleX;
-        const by = p.bbox[1] * scaleY;
-        const bw = p.bbox[2] * scaleX;
-        const bh = p.bbox[3] * scaleY;
-        return {
-          classKey: p.class,
-          bbox: [bx, by, bw, bh],
-          cx: bx + bw / 2,
-          cy: by + bh / 2,
-          score: p.score,
-        };
+        const bx = p.bbox[0] * scaleX, by = p.bbox[1] * scaleY;
+        const bw = p.bbox[2] * scaleX, bh = p.bbox[3] * scaleY;
+        return { classKey: p.class, bbox: [bx, by, bw, bh], cx: bx + bw/2, cy: by + bh/2, score: p.score };
       });
-  } catch(e) {
-    console.warn('detection error', e);
-  }
+  } catch(e) { console.warn('detection error', e); }
 
-  // 検出が終わったらすぐ次へ（setTimeoutでスタックを解放）
   if (isRunning) setTimeout(detectionLoop, 0);
 }
 
 // =====================================================
 // 軌跡ユーティリティ
 // =====================================================
-const trailIdMap = {}; // classKey_idx → stable trailId
-
 function matchOrCreateTrail(classKey, cx, cy, idx) {
-  // 同クラスの既存軌跡から最近傍を探す
   let bestId = null, bestDist = 120;
   Object.keys(trails).forEach(id => {
     if (!id.startsWith(classKey + '_')) return;
@@ -520,24 +631,19 @@ function drawTrailLines(id, color) {
 }
 
 function drawCenterDot(cx, cy, color) {
-  ctx.beginPath();
-  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
   ctx.fillStyle = color; ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, 11, 0, Math.PI * 2);
-  ctx.strokeStyle = hexAlpha(color, 0.4);
-  ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI * 2);
+  ctx.strokeStyle = hexAlpha(color, 0.4); ctx.lineWidth = 1.5; ctx.stroke();
 }
 
 function drawBox(bx, by, bw, bh, color, label, score) {
   ctx.strokeStyle = color; ctx.lineWidth = 1.5;
   ctx.setLineDash([]); ctx.strokeRect(bx, by, bw, bh);
-  // 十字の中心マーカー
   const cx = bx + bw/2, cy = by + bh/2;
   ctx.strokeStyle = hexAlpha(color, 0.5); ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(cx-8, cy); ctx.lineTo(cx+8, cy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx, cy-8); ctx.lineTo(cx, cy+8); ctx.stroke();
-  // ラベル
   ctx.font = 'bold 11px Courier New';
   const txt = label + (score < 1 ? ' ' + Math.round(score*100) + '%' : '');
   const tw = ctx.measureText(txt).width + 8;
@@ -546,18 +652,15 @@ function drawBox(bx, by, bw, bh, color, label, score) {
 }
 
 function hexAlpha(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // =====================================================
-// カラーボール検出（毎フレーム・軽量版）
+// カラーボール検出（軽量版）
 // =====================================================
-function detectBallByColor() {
+function detectBallByColor(W, H) {
   if (!vid.videoWidth) return null;
-  // 小さいバッファで処理
   const ow = 160, oh = 120;
   const off = document.createElement('canvas');
   off.width = ow; off.height = oh;
@@ -578,11 +681,7 @@ function detectBallByColor() {
     }
   }
   if (cnt < 5) return null;
-  // canvas 座標にスケール変換
-  return {
-    x: (sx / cnt) / ow * canvas.width,
-    y: (sy / cnt) / oh * canvas.height,
-  };
+  return { x: (sx/cnt) / ow * W, y: (sy/cnt) / oh * H };
 }
 
 // =====================================================
@@ -607,7 +706,6 @@ document.getElementById('btnZoomReset').onclick = () => applyZoom(1.0);
 
 // ピンチズーム
 let lastPinchDist = null;
-const canvasWrap = document.getElementById('canvas-wrap');
 canvasWrap.addEventListener('touchstart', e => { if (e.touches.length === 2) lastPinchDist = pDist(e.touches); }, { passive: true });
 canvasWrap.addEventListener('touchmove',  e => { if (e.touches.length === 2 && lastPinchDist) { const d = pDist(e.touches); applyZoom(zoomLevel + (d - lastPinchDist) / 200); lastPinchDist = d; } }, { passive: true });
 canvasWrap.addEventListener('touchend',   () => { lastPinchDist = null; });
@@ -645,6 +743,7 @@ btnShot.onclick = () => {
 
 btnRec.onclick = () => {
   recordedChunks = [];
+  // ★ canvas.captureStream() は canvas の実ピクセルサイズで録画される
   const mimeType = ['video/mp4','video/webm;codecs=h264','video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
   try { mediaRecorder = new MediaRecorder(canvas.captureStream(30), mimeType ? { mimeType } : {}); }
   catch(e) { mediaRecorder = new MediaRecorder(canvas.captureStream(30)); }
