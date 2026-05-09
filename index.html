@@ -15,7 +15,6 @@
       align-items: center; padding: 20px;
     }
     h1 { font-size: 16px; letter-spacing: 0.15em; color: #ff4444; margin-bottom: 14px; text-transform: uppercase; }
-
     .control-row {
       display: flex; gap: 8px; margin-bottom: 8px;
       align-items: center; flex-wrap: wrap;
@@ -29,66 +28,10 @@
     button:hover:not(:disabled) { background: #2a2a2a; color: #fff; }
     button:disabled { opacity: 0.4; cursor: default; }
     button.active-rec { background: #8e44ad; color: #fff; border-color: #9b59b6; animation: pulse 1.2s infinite; }
+    button.active-tap { background: #1a6b3a; color: #7dcea0; border-color: #27ae60; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
     select { background: #1a1a1a; color: #ccc; border: 1px solid #444; border-radius: 4px; font-size: 11px; padding: 4px 6px; }
     input[type=range] { accent-color: #27ae60; }
-
-    /* ---- ライブ配信ボタン ---- */
-    #btnLive {
-      background: linear-gradient(135deg, #c0392b, #8e1a0e);
-      color: #fff; border-color: #e74c3c;
-      font-weight: bold; letter-spacing: 0.05em;
-    }
-    #btnLive:hover:not(:disabled) { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-
-    /* ---- ライブ配信モーダル ---- */
-    #liveModal {
-      display: none;
-      position: fixed; inset: 0; z-index: 1000;
-      background: rgba(0,0,0,0.85);
-      align-items: center; justify-content: center;
-      padding: 20px;
-    }
-    #liveModal.open { display: flex; }
-    #liveModalBox {
-      background: #141414; border: 1px solid #333;
-      border-radius: 12px; padding: 24px;
-      width: 100%; max-width: 480px;
-      max-height: 90vh; overflow-y: auto;
-    }
-    #liveModalBox h2 {
-      font-size: 14px; color: #ff4444; letter-spacing: 0.1em;
-      margin-bottom: 16px; text-transform: uppercase;
-    }
-    .live-platform {
-      border: 1px solid #2a2a2a; border-radius: 8px;
-      padding: 14px; margin-bottom: 12px;
-      background: #1a1a1a;
-    }
-    .live-platform h3 {
-      font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
-    }
-    .live-platform h3 .icon { font-size: 16px; }
-    .live-steps {
-      font-size: 11px; color: #888; line-height: 2;
-      padding-left: 4px;
-    }
-    .live-steps li { list-style: none; padding-left: 12px; position: relative; }
-    .live-steps li::before { content: '▸'; position: absolute; left: 0; color: #555; }
-    .live-steps a {
-      color: #5dade2; text-decoration: none;
-    }
-    .live-note {
-      font-size: 10px; color: #555; margin-top: 8px;
-      padding: 8px; background: #111; border-radius: 4px; line-height: 1.6;
-    }
-    .live-note strong { color: #888; }
-    #btnLiveClose {
-      width: 100%; margin-top: 12px;
-      background: #2a2a2a; color: #aaa; border-color: #444;
-      padding: 10px;
-    }
-    #btnLiveClose:hover { background: #333; color: #fff; }
 
     /* ---- 追跡対象セレクター ---- */
     #targetPanel {
@@ -133,31 +76,24 @@
     .zoom-reset:hover:not(:disabled) { background: #1a2e22; }
     #zoomMode { font-size: 9px; color: #555; margin-top: 5px; }
 
-    /* ---- Canvas wrap ----
-       canvas の物理ピクセルサイズ = 表示サイズ に固定するため
-       wrap の clientWidth/Height を JS で毎フレーム取得して canvas に反映する。
-       aspect-ratio は CSS で維持する。
-    ---- */
+    /* ---- Canvas ---- */
     #canvas-wrap {
       position: relative; border: 1px solid #2a2a2a;
       border-radius: 10px; overflow: hidden;
-      width: 100%; max-width: 720px; aspect-ratio: 16/9; background: #111;
+      width: 100%; max-width: 720px; aspect-ratio: 4/3; background: #111;
     }
-    #vid {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%; object-fit: cover;
-      opacity: 0; pointer-events: none;
-    }
-    #canvas {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%; display: block;
-    }
+    #vid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
+    #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+
+    /* タップ選択モード時のカーソル */
+    #canvas-wrap.tap-mode { cursor: crosshair; }
 
     /* HUD 類 */
-    #recHud { position: absolute; top: 10px; right: 12px; color: #9b59b6; display: none; font-size: 10px; letter-spacing: 0.08em; }
-    #zoomHud { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #7dcea0; letter-spacing: 0.08em; pointer-events: none; display: none; }
+    #recHud    { position: absolute; top: 10px; right: 12px; color: #9b59b6; display: none; font-size: 10px; letter-spacing: 0.08em; }
+    #zoomHud   { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #7dcea0; letter-spacing: 0.08em; pointer-events: none; display: none; }
+    #tapHud    { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #27ae60; letter-spacing: 0.08em; pointer-events: none; display: none; white-space: nowrap; background: rgba(0,0,0,0.55); padding: 3px 10px; border-radius: 20px; }
     #modelStatus { position: absolute; bottom: 10px; left: 12px; font-size: 9px; color: #555; pointer-events: none; }
-    #fpsHud { position: absolute; top: 10px; left: 12px; font-size: 9px; color: #555; pointer-events: none; }
+    #fpsHud    { position: absolute; top: 10px; left: 12px; font-size: 9px; color: #555; pointer-events: none; }
 
     /* ---- ギャラリー ---- */
     #galleryGrid {
@@ -176,7 +112,6 @@
 
 <h1>&#9654; AI & Color Tracker Pro</h1>
 
-<!-- コントロール行 -->
 <div class="control-row">
   <select id="camSelect"><option>Loading...</option></select>
   <button id="btnStart">START</button>
@@ -184,10 +119,12 @@
   <button id="btnShot" disabled style="color:#5dade2; border-color:#2980b9;">&#128247; SHOT</button>
   <button id="btnRec" disabled>&#9210; REC</button>
   <button id="btnRecStop" disabled>&#9209; STOP</button>
-  <button id="btnLive">&#128250; LIVE配信</button>
 </div>
 
 <div class="control-row">
+  <!-- タップ選択ボタン -->
+  <button id="btnTapMode" disabled title="画面をタップして物体を個別に選択追跡">&#128290; タップ選択</button>
+  <button id="btnClearTap" disabled title="タップ選択をすべてクリア">&#10005; 選択解除</button>
   <label style="font-size:10px; color:#888;">カラー検出色
     <select id="ballColor" style="margin-left:4px;">
       <option value="none">なし</option>
@@ -203,13 +140,11 @@
   </label>
 </div>
 
-<!-- 追跡対象 -->
 <div id="targetPanel">
-  <div class="panel-title">TRACKING TARGETS ― クリックでON/OFF（複数選択可）</div>
+  <div class="panel-title">TRACKING TARGETS ― クリックでON/OFF（複数選択可） ／ タップ選択モード中は画面タップで指定</div>
   <div class="target-grid" id="targetGrid"></div>
 </div>
 
-<!-- ズーム -->
 <div id="zoomPanel">
   <div class="zoom-row">
     <span class="zoom-label">ZOOM &#215;<span id="zoomVal">1.0</span></span>
@@ -221,76 +156,17 @@
   <div id="zoomMode"></div>
 </div>
 
-<!-- カメラ映像 -->
 <div id="canvas-wrap">
   <video id="vid" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
   <div id="recHud">&#9210; REC</div>
   <div id="zoomHud">&#128269; &#215;<span id="zoomHudVal">1.0</span></div>
+  <div id="tapHud">&#128290; タップして追跡する物体を選択</div>
   <div id="modelStatus">AI MODEL: Loading...</div>
   <div id="fpsHud">-- fps</div>
 </div>
 
 <div id="galleryGrid"></div>
-
-<!-- ===== ライブ配信ガイド モーダル ===== -->
-<div id="liveModal">
-  <div id="liveModalBox">
-    <h2>&#128250; スマホ単独ライブ配信ガイド</h2>
-
-    <div class="live-platform">
-      <h3><span class="icon">&#9654;</span> YouTube Live（おすすめ）</h3>
-      <ul class="live-steps">
-        <li>① このページを <strong>Chrome for iOS/Android</strong> で開く</li>
-        <li>② カメラを起動してトラッカーを動かす</li>
-        <li>③ iOSなら <strong>ReStream</strong> アプリをインストール</li>
-        <li>④ Restreamで「画面収録配信」を選択</li>
-        <li>⑤ YouTubeアカウントを接続して配信開始</li>
-        <li>⑥ iOSコントロールセンターの●画面収録をタップ</li>
-        <li>→ このアプリ画面がそのまま配信されます</li>
-      </ul>
-      <div class="live-note">
-        <strong>iOS</strong>: 設定 → コントロールセンター → 画面収録 を追加しておく<br>
-        <strong>Android</strong>: <a href="https://play.google.com/store/apps/details?id=com.streamlabs.slobs" target="_blank">Streamlabs</a> アプリの「画面配信」機能を使用
-      </div>
-    </div>
-
-    <div class="live-platform">
-      <h3><span class="icon">&#128247;</span> Instagram Live</h3>
-      <ul class="live-steps">
-        <li>① <a href="https://apps.apple.com/app/restream/id1474010800" target="_blank">Restream</a> または <a href="https://streamlabs.com" target="_blank">Streamlabs</a> アプリをインストール</li>
-        <li>② Instagramアカウントを接続</li>
-        <li>③「画面を共有」でこのブラウザタブを選択</li>
-        <li>④ 配信開始ボタンをタップ</li>
-      </ul>
-      <div class="live-note">
-        InstagramはAPIの制限でWebからの直接RTMP配信が不可。<br>
-        <strong>Restream / Streamlabs</strong> が最もかんたんな迂回手段です。
-      </div>
-    </div>
-
-    <div class="live-platform">
-      <h3><span class="icon">&#9889;</span> 最速：iOS 画面収録をそのまま配信</h3>
-      <ul class="live-steps">
-        <li>① <a href="https://apps.apple.com/app/restream/id1474010800" target="_blank">Restream</a> アプリをインストール・ログイン</li>
-        <li>② Restreamで配信先（YouTube/Instagram）を設定</li>
-        <li>③ Restream内で「Go Live → 画面」を選択</li>
-        <li>④ このブラウザでトラッカーを起動した状態で</li>
-        <li>⑤ 画面収録 → Restream を選んで開始</li>
-      </ul>
-      <div class="live-note">
-        <strong>無料</strong>で YouTube + Instagram に同時配信可能。ウォーターマークあり（有料版で削除）。
-      </div>
-    </div>
-
-    <div class="live-note" style="margin-top:4px; font-size:10px; color:#444;">
-      ブラウザのみでRTMP直接配信は現時点でスマホOSの制限により技術的に不可能です。
-      上記アプリを経由することで実現できます。
-    </div>
-
-    <button id="btnLiveClose">閉じる</button>
-  </div>
-</div>
 
 <script>
 // =====================================================
@@ -306,9 +182,8 @@ const btnStop      = document.getElementById('btnStop');
 const btnShot      = document.getElementById('btnShot');
 const btnRec       = document.getElementById('btnRec');
 const btnRecStop   = document.getElementById('btnRecStop');
-const btnLive      = document.getElementById('btnLive');
-const liveModal    = document.getElementById('liveModal');
-const btnLiveClose = document.getElementById('btnLiveClose');
+const btnTapMode   = document.getElementById('btnTapMode');
+const btnClearTap  = document.getElementById('btnClearTap');
 const zoomRange    = document.getElementById('zoomRange');
 const zoomPanel    = document.getElementById('zoomPanel');
 const zoomHud      = document.getElementById('zoomHud');
@@ -318,13 +193,7 @@ const trailValEl   = document.getElementById('trailVal');
 const modelStatus  = document.getElementById('modelStatus');
 const fpsHud       = document.getElementById('fpsHud');
 const canvasWrap   = document.getElementById('canvas-wrap');
-
-// =====================================================
-// ライブ配信モーダル
-// =====================================================
-btnLive.onclick      = () => liveModal.classList.add('open');
-btnLiveClose.onclick = () => liveModal.classList.remove('open');
-liveModal.addEventListener('click', e => { if (e.target === liveModal) liveModal.classList.remove('open'); });
+const tapHud       = document.getElementById('tapHud');
 
 // =====================================================
 // 追跡対象定義
@@ -384,8 +253,107 @@ let trails = {};
 let fpsFrames = 0, fpsLast = performance.now();
 
 // =====================================================
-// canvas の物理サイズを wrap の表示サイズに同期する
-// ★ これが録画画角ズレの修正ポイント
+// タップ選択モード
+// =====================================================
+let tapModeActive = false;
+
+// タップで選択・固定した追跡ターゲット
+// { id: string, classKey: string, color: string, label: string,
+//   bbox: [x,y,w,h],   // 最新のbbox
+//   pinned: bool        // trueの間は強調表示
+// }
+let pinnedTargets = [];   // タップで選択したターゲット群
+// タップ時のリップル演出
+let tapRipples = [];      // { x, y, t, color }
+
+// タップ選択モードON/OFF
+btnTapMode.onclick = () => {
+  tapModeActive = !tapModeActive;
+  if (tapModeActive) {
+    btnTapMode.classList.add('active-tap');
+    btnTapMode.textContent = '\uD83D\uDCD0 タップ選択 ON';
+    canvasWrap.classList.add('tap-mode');
+    tapHud.style.display = 'block';
+  } else {
+    btnTapMode.classList.remove('active-tap');
+    btnTapMode.textContent = '\uD83D\uDCD0 タップ選択';
+    canvasWrap.classList.remove('tap-mode');
+    tapHud.style.display = 'none';
+  }
+};
+
+// 選択解除
+btnClearTap.onclick = () => {
+  pinnedTargets = [];
+  tapRipples = [];
+};
+
+// canvas タップ / クリック
+function handleCanvasTap(clientX, clientY) {
+  if (!tapModeActive || !isRunning) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const tx = clientX - rect.left;
+  const ty = clientY - rect.top;
+
+  // タップ座標を canvas 内ピクセルに変換（CSS表示サイズ→canvas実ピクセル）
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = tx * scaleX;
+  const cy = ty * scaleY;
+
+  // 現在の detections の中からタップ座標に含まれるものを検索
+  let hit = null;
+  for (const det of detections) {
+    const [bx, by, bw, bh] = det.bbox;
+    if (cx >= bx && cx <= bx+bw && cy >= by && cy <= by+bh) {
+      hit = det;
+      break;
+    }
+  }
+
+  if (hit) {
+    const ti = getTargetInfo(hit.classKey);
+    const color = ti ? ti.color : '#00ffff';
+    const label = ti ? ti.label : hit.classKey;
+
+    // 既に同じ bbox 付近が選択済みなら解除
+    const existIdx = pinnedTargets.findIndex(p =>
+      Math.hypot(p.bbox[0]+p.bbox[2]/2 - (hit.bbox[0]+hit.bbox[2]/2),
+                 p.bbox[1]+p.bbox[3]/2 - (hit.bbox[1]+hit.bbox[3]/2)) < 60
+    );
+    if (existIdx >= 0) {
+      // 既存選択を外す → 軌跡も削除
+      const removed = pinnedTargets.splice(existIdx, 1)[0];
+      delete trails[removed.trailId];
+      tapRipples.push({ x: cx, y: cy, t: performance.now(), color: '#888', remove: true });
+    } else {
+      // 新規選択
+      const trailId = 'pinned_' + Date.now();
+      trails[trailId] = { pts: [], age: 0, pinned: true };
+      pinnedTargets.push({ trailId, classKey: hit.classKey, color, label, bbox: [...hit.bbox] });
+      tapRipples.push({ x: cx, y: cy, t: performance.now(), color });
+    }
+  } else {
+    // 物体が検出されていない場所をタップ → ミスリップル
+    tapRipples.push({ x: cx, y: cy, t: performance.now(), color: '#555', miss: true });
+  }
+}
+
+canvasWrap.addEventListener('click', e => {
+  if (e.touches) return; // touchend handled separately
+  handleCanvasTap(e.clientX, e.clientY);
+});
+canvasWrap.addEventListener('touchend', e => {
+  if (!tapModeActive) return;
+  if (e.changedTouches.length === 1) {
+    handleCanvasTap(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    e.preventDefault();
+  }
+}, { passive: false });
+
+// =====================================================
+// canvas サイズを wrap に同期
 // =====================================================
 function syncCanvasSize() {
   const rect = canvasWrap.getBoundingClientRect();
@@ -397,10 +365,7 @@ function syncCanvasSize() {
   }
   return { W, H };
 }
-
-// resize observer で wrap サイズが変わっても追従
-const resizeObs = new ResizeObserver(() => { if (!isRunning) return; syncCanvasSize(); });
-resizeObs.observe(canvasWrap);
+new ResizeObserver(() => { if (isRunning) syncCanvasSize(); }).observe(canvasWrap);
 
 // =====================================================
 // 初期化
@@ -416,10 +381,7 @@ async function init() {
     modelStatus.textContent = 'AI MODEL: Loading...';
     model = await cocoSsd.load();
     modelStatus.textContent = 'AI MODEL: Ready ✓';
-  } catch(e) {
-    console.error('init error', e);
-    modelStatus.textContent = 'AI MODEL: Error';
-  }
+  } catch(e) { modelStatus.textContent = 'AI MODEL: Error'; }
 }
 init();
 
@@ -428,7 +390,7 @@ init();
 // =====================================================
 btnStart.onclick = async () => {
   if (stream) stream.getTracks().forEach(t => t.stop());
-  trails = {}; detections = [];
+  trails = {}; detections = []; pinnedTargets = []; tapRipples = [];
 
   try {
     let constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
@@ -441,43 +403,34 @@ btnStart.onclick = async () => {
 
     currentTrack = stream.getVideoTracks()[0];
     const settings = currentTrack.getSettings();
-    const facing   = settings.facingMode || '';
-    const lbl      = (currentTrack.label || '').toLowerCase();
-    isFrontCamera  = facing === 'user' || lbl.includes('front') || lbl.includes('前面');
+    isFrontCamera = settings.facingMode === 'user' ||
+                    (currentTrack.label||'').toLowerCase().includes('front');
 
     const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
     if (caps.zoom) {
       nativeZoom = true;
-      zoomRange.min = Math.round((caps.zoom.min || 1) * 100);
-      zoomRange.max = Math.round((caps.zoom.max || 8) * 100);
+      zoomRange.min = Math.round((caps.zoom.min||1)*100);
+      zoomRange.max = Math.round((caps.zoom.max||8)*100);
       document.getElementById('zoomMode').textContent = 'ネイティブズーム対応（光学）';
       document.getElementById('zoomMode').style.color = '#27ae60';
     } else {
-      nativeZoom = false;
-      zoomRange.min = 100; zoomRange.max = 800;
+      nativeZoom = false; zoomRange.min = 100; zoomRange.max = 800;
       document.getElementById('zoomMode').textContent = 'デジタルズーム';
       document.getElementById('zoomMode').style.color = '#666';
     }
-    zoomRange.value = 100;
-    applyZoom(1.0);
+    zoomRange.value = 100; applyZoom(1.0);
     zoomPanel.classList.add('visible');
 
     btnStart.disabled = true; btnStop.disabled = false;
     btnShot.disabled = false; btnRec.disabled = false;
+    btnTapMode.disabled = false; btnClearTap.disabled = false;
 
     isRunning = true;
     fpsLast = performance.now(); fpsFrames = 0;
-
-    // ★ 開始前に canvas サイズを確定させる
     syncCanvasSize();
-
     drawLoop();
     detectionLoop();
-
-  } catch(e) {
-    alert('Camera Error: ' + e.message);
-    console.error(e);
-  }
+  } catch(e) { alert('Camera Error: ' + e.message); }
 };
 
 // =====================================================
@@ -485,62 +438,171 @@ btnStart.onclick = async () => {
 // =====================================================
 function drawLoop() {
   if (!isRunning) return;
-
-  // ★ wrap の実ピクセルに合わせて canvas を同期（毎フレーム）
   const { W, H } = syncCanvasSize();
-
   if (!vid.videoWidth) { drawAnimId = requestAnimationFrame(drawLoop); return; }
 
-  // 映像描画（デジタルズーム込み）
+  // 映像描画
   const dz = nativeZoom ? 1.0 : zoomLevel;
-  const sw = vid.videoWidth / dz,  sh = vid.videoHeight / dz;
+  const sw = vid.videoWidth / dz, sh = vid.videoHeight / dz;
   const sx = (vid.videoWidth - sw) / 2, sy = (vid.videoHeight - sh) / 2;
-
   ctx.save();
-  if (isFrontCamera) { ctx.scale(-1, 1); ctx.drawImage(vid, sx, sy, sw, sh, -W, 0, W, H); }
-  else               { ctx.drawImage(vid, sx, sy, sw, sh, 0, 0, W, H); }
+  if (isFrontCamera) { ctx.scale(-1,1); ctx.drawImage(vid,sx,sy,sw,sh,-W,0,W,H); }
+  else               { ctx.drawImage(vid,sx,sy,sw,sh,0,0,W,H); }
   ctx.restore();
 
-  // カラーボール検出（毎フレーム・軽量）
-  if (activeTargets.has('COLOR_BALL') && ballColorSel.value !== 'none') {
-    const cb = detectBallByColor(W, H);
-    if (cb) {
-      updateTrail('COLOR_BALL_0', cb.x, cb.y);
-      const ti = getTargetInfo('COLOR_BALL');
-      drawBox(cb.x - 15, cb.y - 15, 30, 30, ti.color, 'カラーボール', 1.0);
-      drawTrailLines('COLOR_BALL_0', ti.color);
-      drawCenterDot(cb.x, cb.y, ti.color);
+  const maxLen = +trailSlider.value;
+  const now = performance.now();
+
+  // =====================================================
+  // [A] タップ選択モード：pinnedTargets のみ描画
+  // =====================================================
+  if (tapModeActive && pinnedTargets.length > 0) {
+
+    // pinnedTargets を最新 detections でアップデート
+    pinnedTargets.forEach(pt => {
+      // 同クラスの検出結果から最近傍を探す
+      let best = null, bestDist = 100;
+      detections.forEach(det => {
+        if (det.classKey !== pt.classKey) return;
+        const dcx = det.bbox[0]+det.bbox[2]/2;
+        const dcy = det.bbox[1]+det.bbox[3]/2;
+        const pcx = pt.bbox[0]+pt.bbox[2]/2;
+        const pcy = pt.bbox[1]+pt.bbox[3]/2;
+        const d = Math.hypot(dcx-pcx, dcy-pcy);
+        if (d < bestDist) { bestDist = d; best = det; }
+      });
+      if (best) {
+        pt.bbox = [...best.bbox];
+        const cx = best.cx, cy = best.cy;
+        updateTrail(pt.trailId, cx, cy, maxLen);
+      }
+    });
+
+    // 描画：選択された物体だけ強調
+    pinnedTargets.forEach(pt => {
+      const [bx, by, bw, bh] = pt.bbox;
+      const cx = bx + bw/2, cy = by + bh/2;
+
+      // bbox（太め・点滅なし）
+      ctx.strokeStyle = pt.color; ctx.lineWidth = 2.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(bx, by, bw, bh);
+
+      // 選択マーカー（四隅の L 字）
+      const cs = 12;
+      ctx.strokeStyle = pt.color; ctx.lineWidth = 3;
+      [[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].forEach(([ox,oy]) => {
+        const dx = ox===bx ? 1 : -1, dy = oy===by ? 1 : -1;
+        ctx.beginPath(); ctx.moveTo(ox+dx*cs,oy); ctx.lineTo(ox,oy); ctx.lineTo(ox,oy+dy*cs); ctx.stroke();
+      });
+
+      // ラベル（背景付き・大きめ）
+      ctx.font = 'bold 13px Courier New';
+      const txt = '\u25C6 ' + pt.label;
+      const tw = ctx.measureText(txt).width + 10;
+      ctx.fillStyle = pt.color; ctx.fillRect(bx, by-20, tw, 20);
+      ctx.fillStyle = '#000'; ctx.fillText(txt, bx+5, by-5);
+
+      // 軌跡ライン
+      drawTrailLines(pt.trailId, pt.color);
+
+      // 先端ドット（大きめ）
+      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI*2);
+      ctx.fillStyle = pt.color; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI*2);
+      ctx.strokeStyle = hexAlpha(pt.color, 0.4); ctx.lineWidth = 2; ctx.stroke();
+    });
+
+    // タップ選択モードでも非選択物体の枠は薄く表示
+    detections.forEach(det => {
+      const isPinned = pinnedTargets.some(p => p.classKey === det.classKey &&
+        Math.hypot(p.bbox[0]+p.bbox[2]/2-(det.bbox[0]+det.bbox[2]/2),
+                   p.bbox[1]+p.bbox[3]/2-(det.bbox[1]+det.bbox[3]/2)) < 60);
+      if (!isPinned && activeTargets.has(det.classKey)) {
+        const ti = getTargetInfo(det.classKey);
+        if (ti) {
+          ctx.strokeStyle = hexAlpha(ti.color, 0.25); ctx.lineWidth = 1;
+          ctx.setLineDash([4,4]); ctx.strokeRect(det.bbox[0],det.bbox[1],det.bbox[2],det.bbox[3]);
+          ctx.setLineDash([]);
+        }
+      }
+    });
+
+  } else {
+    // =====================================================
+    // [B] 通常モード：activeTargets を全描画
+    // =====================================================
+
+    // カラーボール検出
+    if (activeTargets.has('COLOR_BALL') && ballColorSel.value !== 'none') {
+      const cb = detectBallByColor(W, H);
+      if (cb) {
+        updateTrail('COLOR_BALL_0', cb.x, cb.y, maxLen);
+        const ti = getTargetInfo('COLOR_BALL');
+        drawBox(cb.x-15, cb.y-15, 30, 30, ti.color, 'カラーボール', 1.0);
+        drawTrailLines('COLOR_BALL_0', ti.color);
+        drawCenterDot(cb.x, cb.y, ti.color);
+      }
     }
+
+    const usedIds = new Set();
+    detections.forEach((det, idx) => {
+      if (!activeTargets.has(det.classKey)) return;
+      const ti = getTargetInfo(det.classKey);
+      if (!ti) return;
+      const trailId = matchOrCreateTrail(det.classKey, det.cx, det.cy, idx);
+      usedIds.add(trailId);
+      updateTrail(trailId, det.cx, det.cy, maxLen);
+      drawBox(det.bbox[0], det.bbox[1], det.bbox[2], det.bbox[3], ti.color, ti.label, det.score);
+      drawTrailLines(trailId, ti.color);
+      drawCenterDot(det.cx, det.cy, ti.color);
+    });
+
+    Object.keys(trails).forEach(id => {
+      if (id.startsWith('pinned_') || id.startsWith('COLOR_BALL')) return;
+      if (!usedIds.has(id)) {
+        trails[id].age = (trails[id].age||0) + 1;
+        if (trails[id].age > 30) delete trails[id];
+      }
+    });
   }
 
-  // AI検出結果を描画（前フレームの detections を参照）
-  const maxLen = +trailSlider.value;
-  const usedIds = new Set();
-
-  detections.forEach((det, idx) => {
-    if (!activeTargets.has(det.classKey)) return;
-    const ti = getTargetInfo(det.classKey);
-    if (!ti) return;
-    const trailId = matchOrCreateTrail(det.classKey, det.cx, det.cy, idx);
-    usedIds.add(trailId);
-    updateTrail(trailId, det.cx, det.cy, maxLen);
-    drawBox(det.bbox[0], det.bbox[1], det.bbox[2], det.bbox[3], ti.color, ti.label, det.score);
-    drawTrailLines(trailId, ti.color);
-    drawCenterDot(det.cx, det.cy, ti.color);
-  });
-
-  Object.keys(trails).forEach(id => {
-    if (!usedIds.has(id) && !id.startsWith('COLOR_BALL')) {
-      trails[id].age = (trails[id].age || 0) + 1;
-      if (trails[id].age > 30) delete trails[id];
+  // =====================================================
+  // タップリップル演出
+  // =====================================================
+  const RIPPLE_DURATION = 600;
+  tapRipples = tapRipples.filter(r => now - r.t < RIPPLE_DURATION);
+  tapRipples.forEach(r => {
+    const prog = (now - r.t) / RIPPLE_DURATION;
+    const radius = 20 + prog * 30;
+    const alpha = 1 - prog;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, radius, 0, Math.PI*2);
+    ctx.strokeStyle = hexAlpha(r.color, alpha);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (!r.miss && !r.remove) {
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, radius * 0.4, 0, Math.PI*2);
+      ctx.fillStyle = hexAlpha(r.color, alpha * 0.5);
+      ctx.fill();
     }
   });
 
+  // タップモード時：選択数をHUDに表示
+  if (tapModeActive) {
+    tapHud.style.display = 'block';
+    tapHud.textContent = pinnedTargets.length === 0
+      ? '\uD83D\uDCD0 タップして追跡する物体を選択'
+      : `\uD83D\uDCD0 ${pinnedTargets.length}件選択中（再タップで解除）`;
+  }
+
+  // FPS
   fpsFrames++;
-  const now = performance.now();
-  if (now - fpsLast > 1000) {
-    fpsHud.textContent = Math.round(fpsFrames / ((now - fpsLast) / 1000)) + ' fps';
-    fpsFrames = 0; fpsLast = now;
+  const n = performance.now();
+  if (n - fpsLast > 1000) {
+    fpsHud.textContent = Math.round(fpsFrames/((n-fpsLast)/1000)) + ' fps';
+    fpsFrames = 0; fpsLast = n;
   }
 
   drawAnimId = requestAnimationFrame(drawLoop);
@@ -559,28 +621,25 @@ async function detectionLoop() {
     off.width = ow; off.height = oh;
     const oc = off.getContext('2d');
     const dz = nativeZoom ? 1.0 : zoomLevel;
-    const sw = vid.videoWidth / dz, sh = vid.videoHeight / dz;
-    const sx = (vid.videoWidth - sw) / 2, sy = (vid.videoHeight - sh) / 2;
+    const sw = vid.videoWidth/dz, sh = vid.videoHeight/dz;
+    const sx = (vid.videoWidth-sw)/2, sy = (vid.videoHeight-sh)/2;
     if (isFrontCamera) {
       oc.save(); oc.scale(-1,1);
-      oc.drawImage(vid, sx, sy, sw, sh, -ow, 0, ow, oh);
-      oc.restore();
+      oc.drawImage(vid,sx,sy,sw,sh,-ow,0,ow,oh); oc.restore();
     } else {
-      oc.drawImage(vid, sx, sy, sw, sh, 0, 0, ow, oh);
+      oc.drawImage(vid,sx,sy,sw,sh,0,0,ow,oh);
     }
 
     const preds = await model.detect(off);
-
-    // ★ canvas の現在サイズにスケール変換
     const W = canvas.width, H = canvas.height;
-    const scaleX = W / ow, scaleY = H / oh;
+    const scaleX = W/ow, scaleY = H/oh;
 
     detections = preds
-      .filter(p => activeTargets.has(p.class))
+      .filter(p => activeTargets.has(p.class) || pinnedTargets.some(pt => pt.classKey === p.class))
       .map(p => {
-        const bx = p.bbox[0] * scaleX, by = p.bbox[1] * scaleY;
-        const bw = p.bbox[2] * scaleX, bh = p.bbox[3] * scaleY;
-        return { classKey: p.class, bbox: [bx, by, bw, bh], cx: bx + bw/2, cy: by + bh/2, score: p.score };
+        const bx=p.bbox[0]*scaleX, by=p.bbox[1]*scaleY;
+        const bw=p.bbox[2]*scaleX, bh=p.bbox[3]*scaleY;
+        return { classKey:p.class, bbox:[bx,by,bw,bh], cx:bx+bw/2, cy:by+bh/2, score:p.score };
       });
   } catch(e) { console.warn('detection error', e); }
 
@@ -593,22 +652,22 @@ async function detectionLoop() {
 function matchOrCreateTrail(classKey, cx, cy, idx) {
   let bestId = null, bestDist = 120;
   Object.keys(trails).forEach(id => {
-    if (!id.startsWith(classKey + '_')) return;
+    if (!id.startsWith(classKey+'_') || id.startsWith('pinned_')) return;
     const pts = trails[id].pts;
-    if (!pts || pts.length === 0) return;
-    const last = pts[pts.length - 1];
-    const d = Math.hypot(cx - last.x, cy - last.y);
-    if (d < bestDist) { bestDist = d; bestId = id; }
+    if (!pts||pts.length===0) return;
+    const last = pts[pts.length-1];
+    const d = Math.hypot(cx-last.x, cy-last.y);
+    if (d < bestDist) { bestDist=d; bestId=id; }
   });
-  if (bestId) { trails[bestId].age = 0; return bestId; }
-  const newId = classKey + '_' + Date.now() + '_' + idx;
-  trails[newId] = { pts: [], age: 0 };
+  if (bestId) { trails[bestId].age=0; return bestId; }
+  const newId = classKey+'_'+Date.now()+'_'+idx;
+  trails[newId] = { pts:[], age:0 };
   return newId;
 }
 
 function updateTrail(id, cx, cy, maxLen) {
-  if (!trails[id]) trails[id] = { pts: [], age: 0 };
-  trails[id].pts.push({ x: cx, y: cy });
+  if (!trails[id]) trails[id] = { pts:[], age:0 };
+  trails[id].pts.push({ x:cx, y:cy });
   if (maxLen && trails[id].pts.length > maxLen) trails[id].pts.shift();
   trails[id].age = 0;
 }
@@ -618,158 +677,165 @@ function drawTrailLines(id, color) {
   if (!entry) return;
   const pts = entry.pts;
   if (pts.length < 2) return;
-  for (let i = 1; i < pts.length; i++) {
-    const alpha = i / pts.length;
+  for (let i=1; i<pts.length; i++) {
+    const alpha = i/pts.length;
     ctx.beginPath();
     ctx.moveTo(pts[i-1].x, pts[i-1].y);
     ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.strokeStyle = hexAlpha(color, alpha * 0.9);
-    ctx.lineWidth = 1 + alpha * 3;
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = hexAlpha(color, alpha*0.9);
+    ctx.lineWidth = 1+alpha*3;
+    ctx.lineJoin='round'; ctx.lineCap='round';
     ctx.stroke();
   }
 }
 
 function drawCenterDot(cx, cy, color) {
-  ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-  ctx.fillStyle = color; ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI * 2);
-  ctx.strokeStyle = hexAlpha(color, 0.4); ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,11,0,Math.PI*2);
+  ctx.strokeStyle=hexAlpha(color,0.4); ctx.lineWidth=1.5; ctx.stroke();
 }
 
-function drawBox(bx, by, bw, bh, color, label, score) {
-  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
-  ctx.setLineDash([]); ctx.strokeRect(bx, by, bw, bh);
-  const cx = bx + bw/2, cy = by + bh/2;
-  ctx.strokeStyle = hexAlpha(color, 0.5); ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(cx-8, cy); ctx.lineTo(cx+8, cy); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx, cy-8); ctx.lineTo(cx, cy+8); ctx.stroke();
-  ctx.font = 'bold 11px Courier New';
-  const txt = label + (score < 1 ? ' ' + Math.round(score*100) + '%' : '');
-  const tw = ctx.measureText(txt).width + 8;
-  ctx.fillStyle = color; ctx.fillRect(bx, by - 16, tw, 16);
-  ctx.fillStyle = '#000'; ctx.fillText(txt, bx + 4, by - 4);
+function drawBox(bx,by,bw,bh,color,label,score) {
+  ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  ctx.setLineDash([]); ctx.strokeRect(bx,by,bw,bh);
+  const cx=bx+bw/2, cy=by+bh/2;
+  ctx.strokeStyle=hexAlpha(color,0.5); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx-8,cy); ctx.lineTo(cx+8,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy-8); ctx.lineTo(cx,cy+8); ctx.stroke();
+  ctx.font='bold 11px Courier New';
+  const txt=label+(score<1?' '+Math.round(score*100)+'%':'');
+  const tw=ctx.measureText(txt).width+8;
+  ctx.fillStyle=color; ctx.fillRect(bx,by-16,tw,16);
+  ctx.fillStyle='#000'; ctx.fillText(txt,bx+4,by-4);
 }
 
-function hexAlpha(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+function hexAlpha(hex,alpha) {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // =====================================================
-// カラーボール検出（軽量版）
+// カラーボール検出
 // =====================================================
 function detectBallByColor(W, H) {
   if (!vid.videoWidth) return null;
-  const ow = 160, oh = 120;
-  const off = document.createElement('canvas');
-  off.width = ow; off.height = oh;
-  off.getContext('2d').drawImage(vid, 0, 0, ow, oh);
-  const data = off.getContext('2d').getImageData(0, 0, ow, oh).data;
-  const target = ballColorSel.value;
-  let sx = 0, sy = 0, cnt = 0;
-  for (let y = 0; y < oh; y += 2) {
-    for (let x = 0; x < ow; x += 2) {
-      const i = (y * ow + x) * 4;
-      const r = data[i], g = data[i+1], b = data[i+2];
-      let m = false;
-      if (target === 'white'  && r > 210 && g > 210 && b > 210) m = true;
-      if (target === 'orange' && r > 200 && g > 90  && g < 170 && b < 80) m = true;
-      if (target === 'yellow' && r > 200 && g > 200 && b < 100) m = true;
-      if (target === 'red'    && r > 160 && g < 80  && b < 80) m = true;
-      if (m) { sx += x; sy += y; cnt++; }
-    }
-  }
-  if (cnt < 5) return null;
-  return { x: (sx/cnt) / ow * W, y: (sy/cnt) / oh * H };
+  const ow=160,oh=120;
+  const off=document.createElement('canvas');
+  off.width=ow; off.height=oh;
+  off.getContext('2d').drawImage(vid,0,0,ow,oh);
+  const data=off.getContext('2d').getImageData(0,0,ow,oh).data;
+  const target=ballColorSel.value;
+  let sx=0,sy=0,cnt=0;
+  for(let y=0;y<oh;y+=2){for(let x=0;x<ow;x+=2){
+    const i=(y*ow+x)*4;
+    const r=data[i],g=data[i+1],b=data[i+2];
+    let m=false;
+    if(target==='white'  &&r>210&&g>210&&b>210) m=true;
+    if(target==='orange' &&r>200&&g>90&&g<170&&b<80) m=true;
+    if(target==='yellow' &&r>200&&g>200&&b<100) m=true;
+    if(target==='red'    &&r>160&&g<80&&b<80) m=true;
+    if(m){sx+=x;sy+=y;cnt++;}
+  }}
+  if(cnt<5) return null;
+  return { x:(sx/cnt)/ow*W, y:(sy/cnt)/oh*H };
 }
 
 // =====================================================
 // ズーム
 // =====================================================
 function applyZoom(v) {
-  v = Math.max(1.0, Math.min(8.0, v));
-  zoomLevel = v;
-  const disp = v.toFixed(1);
-  document.getElementById('zoomVal').textContent = disp;
-  zoomHudVal.textContent = disp;
-  zoomRange.value = Math.round(v * 100);
-  zoomHud.style.display = v > 1.0 ? 'block' : 'none';
-  if (nativeZoom && currentTrack) {
-    try { currentTrack.applyConstraints({ advanced: [{ zoom: v }] }); } catch(e) {}
+  v=Math.max(1.0,Math.min(8.0,v)); zoomLevel=v;
+  const disp=v.toFixed(1);
+  document.getElementById('zoomVal').textContent=disp;
+  zoomHudVal.textContent=disp;
+  zoomRange.value=Math.round(v*100);
+  zoomHud.style.display=v>1.0?'block':'none';
+  if(nativeZoom&&currentTrack){
+    try{currentTrack.applyConstraints({advanced:[{zoom:v}]});}catch(e){}
   }
 }
-zoomRange.addEventListener('input', () => applyZoom(+zoomRange.value / 100));
-document.getElementById('btnZoomIn').onclick    = () => applyZoom(zoomLevel + 0.5);
-document.getElementById('btnZoomOut').onclick   = () => applyZoom(zoomLevel - 0.5);
-document.getElementById('btnZoomReset').onclick = () => applyZoom(1.0);
+zoomRange.addEventListener('input',()=>applyZoom(+zoomRange.value/100));
+document.getElementById('btnZoomIn').onclick    = ()=>applyZoom(zoomLevel+0.5);
+document.getElementById('btnZoomOut').onclick   = ()=>applyZoom(zoomLevel-0.5);
+document.getElementById('btnZoomReset').onclick = ()=>applyZoom(1.0);
 
-// ピンチズーム
-let lastPinchDist = null;
-canvasWrap.addEventListener('touchstart', e => { if (e.touches.length === 2) lastPinchDist = pDist(e.touches); }, { passive: true });
-canvasWrap.addEventListener('touchmove',  e => { if (e.touches.length === 2 && lastPinchDist) { const d = pDist(e.touches); applyZoom(zoomLevel + (d - lastPinchDist) / 200); lastPinchDist = d; } }, { passive: true });
-canvasWrap.addEventListener('touchend',   () => { lastPinchDist = null; });
-function pDist(t) { const dx = t[0].clientX-t[1].clientX, dy = t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
+// ピンチズーム（タップ選択と競合しないよう touches===2 のみ）
+let lastPinchDist=null;
+canvasWrap.addEventListener('touchstart',e=>{
+  if(e.touches.length===2) lastPinchDist=pDist(e.touches);
+},{passive:true});
+canvasWrap.addEventListener('touchmove',e=>{
+  if(e.touches.length===2&&lastPinchDist){
+    const d=pDist(e.touches); applyZoom(zoomLevel+(d-lastPinchDist)/200); lastPinchDist=d;
+  }
+},{passive:true});
+canvasWrap.addEventListener('touchend',e=>{
+  if(e.touches.length<2) lastPinchDist=null;
+});
+function pDist(t){const dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy);}
 
 // =====================================================
 // 停止
 // =====================================================
-btnStop.onclick = () => {
-  isRunning = false;
-  if (drawAnimId) { cancelAnimationFrame(drawAnimId); drawAnimId = null; }
-  if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  currentTrack = null; detections = []; trails = {};
-  zoomPanel.classList.remove('visible');
-  zoomHud.style.display = 'none';
-  btnStart.disabled = false; btnStop.disabled = true;
-  btnShot.disabled = true; btnRec.disabled = true; btnRecStop.disabled = true;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+btnStop.onclick = ()=>{
+  isRunning=false;
+  if(drawAnimId){cancelAnimationFrame(drawAnimId);drawAnimId=null;}
+  if(mediaRecorder?.state==='recording') mediaRecorder.stop();
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  currentTrack=null; detections=[]; trails={}; pinnedTargets=[]; tapRipples=[];
+  zoomPanel.classList.remove('visible'); zoomHud.style.display='none';
+  tapHud.style.display='none'; tapModeActive=false;
+  btnTapMode.classList.remove('active-tap'); btnTapMode.textContent='\uD83D\uDCD0 タップ選択';
+  canvasWrap.classList.remove('tap-mode');
+  btnStart.disabled=false; btnStop.disabled=true;
+  btnShot.disabled=true; btnRec.disabled=true; btnRecStop.disabled=true;
+  btnTapMode.disabled=true; btnClearTap.disabled=true;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 };
 
 // =====================================================
 // スクリーンショット・録画
 // =====================================================
-btnShot.onclick = () => {
-  const dataUrl = canvas.toDataURL('image/png');
-  const a = document.createElement('a'); a.href = dataUrl; a.download = 'shot_' + Date.now() + '.png'; a.click();
-  const item = document.createElement('div'); item.className = 'gallery-item';
-  const img = document.createElement('img'); img.src = dataUrl;
-  const dl = document.createElement('button'); dl.className = 'dl-btn'; dl.textContent = '↓';
-  dl.onclick = () => { const b = document.createElement('a'); b.href = dataUrl; b.download = 'shot_' + Date.now() + '.png'; b.click(); };
+btnShot.onclick = ()=>{
+  const dataUrl=canvas.toDataURL('image/png');
+  const a=document.createElement('a'); a.href=dataUrl; a.download='shot_'+Date.now()+'.png'; a.click();
+  const item=document.createElement('div'); item.className='gallery-item';
+  const img=document.createElement('img'); img.src=dataUrl;
+  const dl=document.createElement('button'); dl.className='dl-btn'; dl.textContent='↓';
+  dl.onclick=()=>{const b=document.createElement('a');b.href=dataUrl;b.download='shot_'+Date.now()+'.png';b.click();};
   item.appendChild(img); item.appendChild(dl);
   document.getElementById('galleryGrid').prepend(item);
 };
 
-btnRec.onclick = () => {
-  recordedChunks = [];
-  // ★ canvas.captureStream() は canvas の実ピクセルサイズで録画される
-  const mimeType = ['video/mp4','video/webm;codecs=h264','video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
-  try { mediaRecorder = new MediaRecorder(canvas.captureStream(30), mimeType ? { mimeType } : {}); }
-  catch(e) { mediaRecorder = new MediaRecorder(canvas.captureStream(30)); }
-  mediaRecorder.ondataavailable = e => { if (e.data?.size > 0) recordedChunks.push(e.data); };
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
-    const url  = URL.createObjectURL(blob);
-    const item = document.createElement('div'); item.className = 'gallery-item';
-    const v    = document.createElement('video'); v.src = url; v.controls = true; v.loop = true;
-    const dl   = document.createElement('button'); dl.className = 'dl-btn'; dl.textContent = '↓';
-    const ext  = (mediaRecorder.mimeType||'').includes('mp4') ? 'mp4' : 'webm';
-    dl.onclick = () => { const a = document.createElement('a'); a.href = url; a.download = 'rec_' + Date.now() + '.' + ext; a.click(); };
+btnRec.onclick = ()=>{
+  recordedChunks=[];
+  const mimeType=['video/mp4','video/webm;codecs=h264','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+  try{mediaRecorder=new MediaRecorder(canvas.captureStream(30),mimeType?{mimeType}:{});}
+  catch(e){mediaRecorder=new MediaRecorder(canvas.captureStream(30));}
+  mediaRecorder.ondataavailable=e=>{if(e.data?.size>0)recordedChunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(recordedChunks,{type:mediaRecorder.mimeType||'video/webm'});
+    const url=URL.createObjectURL(blob);
+    const item=document.createElement('div'); item.className='gallery-item';
+    const v=document.createElement('video'); v.src=url; v.controls=true; v.loop=true;
+    const dl=document.createElement('button'); dl.className='dl-btn'; dl.textContent='↓';
+    const ext=(mediaRecorder.mimeType||'').includes('mp4')?'mp4':'webm';
+    dl.onclick=()=>{const a=document.createElement('a');a.href=url;a.download='rec_'+Date.now()+'.'+ext;a.click();};
     item.appendChild(v); item.appendChild(dl);
     document.getElementById('galleryGrid').prepend(item);
   };
   mediaRecorder.start(100);
-  btnRec.disabled = true; btnRecStop.disabled = false;
+  btnRec.disabled=true; btnRecStop.disabled=false;
   btnRecStop.classList.add('active-rec');
-  document.getElementById('recHud').style.display = 'block';
+  document.getElementById('recHud').style.display='block';
 };
 
-btnRecStop.onclick = () => {
+btnRecStop.onclick = ()=>{
   mediaRecorder.stop();
-  btnRec.disabled = false; btnRecStop.disabled = true;
+  btnRec.disabled=false; btnRecStop.disabled=true;
   btnRecStop.classList.remove('active-rec');
-  document.getElementById('recHud').style.display = 'none';
+  document.getElementById('recHud').style.display='none';
 };
 </script>
 </body>
