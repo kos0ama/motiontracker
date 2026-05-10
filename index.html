@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>AI Cameraman</title>
+  <title>AI Cameraman Pro</title>
 
   <!-- TensorFlow.js -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
@@ -13,20 +13,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
   <!-- MediaPipe Face Mesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
-  <!-- MediaPipe Camera Utils -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
 
   <style>
     /* ===== BASE ===== */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; background: #080808; color: #ddd; font-family: 'Courier New', monospace; overflow-x: hidden; }
+    html, body { height: 100%; background: #050505; color: #ccc; font-family: 'Courier New', monospace; overflow-x: hidden; }
 
     /* ===== APP LAYOUT ===== */
     #app { display: flex; flex-direction: column; min-height: 100dvh; }
 
     /* ----- VIDEO TOP ----- */
     #video-area { position: relative; width: 100%; background: #000; flex-shrink: 0; }
-    #canvas-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #111; overflow: hidden; }
+    #canvas-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #0a0a0a; overflow: hidden; }
     #vid    { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; }
     #canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
 
@@ -35,72 +33,83 @@
       #app { flex-direction: row; height: 100dvh; overflow: hidden; }
       #video-area { flex:1; display:flex; align-items:center; justify-content:center; min-width:0; }
       #canvas-wrap { width:auto; height:100dvh; aspect-ratio:16/9; }
-      #ctrl-area { width:230px; flex:none; height:100dvh; overflow-y:auto; border-left:1px solid #1a1a1a; }
+      #ctrl-area { width:240px; flex:none; height:100dvh; overflow-y:auto; border-left:1px solid #141414; }
     }
 
     /* ----- CONTROLS BOTTOM ----- */
-    #ctrl-area { flex:1; overflow-y:auto; padding:10px 12px 24px; display:flex; flex-direction:column; gap:8px; }
+    #ctrl-area { flex:1; overflow-y:auto; padding:10px 10px 24px; display:flex; flex-direction:column; gap:7px; }
 
-    .section { background:#111; border:1px solid #1e1e1e; border-radius:8px; padding:8px 10px; }
-    .section-title { font-size:9px; color:#444; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:6px; }
+    .section { background:#0d0d0d; border:1px solid #1a1a1a; border-radius:8px; padding:8px 10px; }
+    .section-title { font-size:9px; color:#3a3a3a; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:6px; font-weight:bold; }
 
     /* ===== BUTTONS ===== */
     button {
-      font-family:'Courier New',monospace; font-size:11px; padding:6px 10px;
-      border:1px solid #333; border-radius:6px; background:#181818; color:#aaa;
+      font-family:'Courier New',monospace; font-size:11px; padding:6px 9px;
+      border:1px solid #2a2a2a; border-radius:6px; background:#151515; color:#999;
       cursor:pointer; transition:all 0.12s; white-space:nowrap;
     }
-    button:hover:not(:disabled) { background:#222; color:#fff; }
-    button:disabled { opacity:0.3; cursor:default; }
-    .btn-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    button:hover:not(:disabled) { background:#1f1f1f; color:#ddd; }
+    button:disabled { opacity:0.25; cursor:default; }
+    .btn-row { display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
 
-    .btn-start  { border-color:#1e8449; color:#58d68d; }
-    .btn-stop   { border-color:#922b21; color:#e74c3c; }
-    .btn-shot   { border-color:#1a5276; color:#5dade2; }
-    .btn-rec    { border-color:#6c3483; color:#bb8fce; }
-    .btn-rec.recording { background:#6c3483; color:#fff; animation:pulse 1.2s infinite; }
+    .btn-start  { border-color:#1e5631; color:#4ead70; }
+    .btn-stop   { border-color:#7a2c2c; color:#d06b6b; }
+    .btn-shot   { border-color:#1a4a6b; color:#5dade2; }
+    .btn-rec    { border-color:#5b3a6b; color:#a37db3; }
+    .btn-rec.recording { background:#5b3a6b; color:#fff; animation:pulse 1.2s infinite; }
+    .btn-ai { border-color:#6b5a08; color:#d4b03f; }
+    .btn-ai.on { background:#2d2500; color:#f9e300; border-color:#d4b03f; }
 
-    /* AI Cameraman toggle */
-    .btn-ai { border-color:#7d6608; color:#f4d03f; }
-    .btn-ai.on { background:#3d3000; color:#f9e300; border-color:#f4d03f; }
-
-    /* mode chips */
     .mode-chip {
       display:inline-flex; align-items:center; gap:4px;
-      padding:4px 10px; border:1px solid #2a2a2a; border-radius:20px;
-      font-size:10px; color:#666; cursor:pointer; background:#131313;
+      padding:3px 9px; border:1px solid #242424; border-radius:20px;
+      font-size:10px; color:#555; cursor:pointer; background:#111;
       transition:all 0.12s; user-select:none;
     }
-    .mode-chip.on { border-color:var(--cc,#f4d03f); color:var(--cc,#f4d03f); background:color-mix(in srgb,var(--cc,#f4d03f) 12%,#131313); }
-    .mode-dot { width:6px; height:6px; border-radius:50%; background:var(--cc,#888); opacity:0.4; flex-shrink:0; }
+    .mode-chip.on { border-color:var(--cc,#d4b03f); color:var(--cc,#d4b03f); background:color-mix(in srgb,var(--cc,#d4b03f) 10%,#111); }
+    .mode-dot { width:5px; height:5px; border-radius:50%; background:var(--cc,#666); opacity:0.35; flex-shrink:0; }
     .mode-chip.on .mode-dot { opacity:1; }
 
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
 
-    select { background:#181818; color:#ccc; border:1px solid #333; border-radius:4px; font-size:11px; padding:4px 6px; font-family:'Courier New',monospace; }
-    input[type=range] { accent-color:#f4d03f; width:100%; }
-    label.lbl { font-size:10px; color:#555; display:block; margin-top:6px; }
+    select { background:#151515; color:#aaa; border:1px solid #2a2a2a; border-radius:4px; font-size:10px; padding:4px 6px; font-family:'Courier New',monospace; }
+    input[type=range] { accent-color:#d4b03f; width:100%; }
+    label.lbl { font-size:10px; color:#444; display:block; margin-top:5px; }
 
     /* ===== HUD overlays ===== */
     .hud { position:absolute; font-size:10px; letter-spacing:0.07em; pointer-events:none; }
-    #fpsHud     { top:8px; left:10px; color:#444; }
+    #fpsHud     { top:8px; left:10px; color:#333; }
     #recHud     { top:8px; right:10px; color:#9b59b6; display:none; }
-    #aiHud      { top:8px; left:50%; transform:translateX(-50%); color:#f4d03f; display:none; background:rgba(0,0,0,0.5); padding:2px 10px; border-radius:20px; }
-    #shotFlash  { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.05s; border-radius:4px; }
-    #modelStatus{ bottom:8px; left:10px; color:#333; }
+    #aiHud      { top:8px; left:50%; transform:translateX(-50%); color:#d4b03f; display:none; background:rgba(0,0,0,0.5); padding:2px 10px; border-radius:20px; }
+    #shotFlash  { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.05s; }
+    #modelStatus{ bottom:8px; left:10px; color:#2a2a2a; font-size:9px; }
     #chanceHud  { bottom:30px; left:50%; transform:translateX(-50%); display:none; white-space:nowrap;
-                  background:rgba(244,208,63,0.9); color:#000; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:12px; }
+                  background:rgba(212,176,63,0.9); color:#000; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:11px; }
+    #bufStatus  { top:30px; left:10px; color:#666; display:none; font-size:9px; }
 
-    /* frame guide overlay (autoframing) */
     #frameGuide { position:absolute; inset:0; pointer-events:none; }
 
+    /* ===== VIDEO PLAYER MODAL ===== */
+    #playerModal {
+      display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.92);
+      align-items:center; justify-content:center; padding:20px;
+    }
+    #playerModal.open { display:flex; }
+    #playerBox { background:#111; border:1px solid #2a2a2a; border-radius:10px; padding:16px; width:100%; max-width:720px; }
+    #playerVideo { width:100%; background:#000; border-radius:6px; margin-bottom:12px; }
+    .player-ctrl { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .player-ctrl button { font-size:10px; padding:5px 10px; }
+    .player-ctrl select { font-size:10px; }
+    #btnClosePlayer { margin-left:auto; }
+
     /* ===== gallery ===== */
-    #galleryGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:5px; }
-    .gallery-item { border:1px solid #1e1e1e; border-radius:5px; overflow:hidden; position:relative; }
-    .gallery-item img, .gallery-item video { width:100%; display:block; }
-    .dl-btn { position:absolute; bottom:3px; right:3px; font-size:9px; padding:2px 5px; border-radius:3px; background:rgba(0,0,0,0.8); border:1px solid #444; color:#ccc; cursor:pointer; }
+    #galleryGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:5px; }
+    .gallery-item { border:1px solid #1a1a1a; border-radius:5px; overflow:hidden; position:relative; cursor:pointer; }
+    .gallery-item img, .gallery-item video { width:100%; display:block; object-fit:cover; aspect-ratio:16/9; }
+    .dl-btn { position:absolute; bottom:3px; right:3px; font-size:9px; padding:2px 5px; border-radius:3px; background:rgba(0,0,0,0.85); border:1px solid #444; color:#ccc; cursor:pointer; z-index:10; }
     .gallery-item .badge { position:absolute; top:3px; left:3px; font-size:8px; padding:1px 5px; border-radius:10px; }
-    .badge-auto { background:rgba(244,208,63,0.85); color:#000; }
+    .badge-auto { background:rgba(212,176,63,0.9); color:#000; }
+    .badge-clip { background:rgba(88,214,141,0.9); color:#000; }
     .badge-shot { background:rgba(93,173,226,0.85); color:#000; }
     .badge-rec  { background:rgba(142,68,173,0.85); color:#fff; }
   </style>
@@ -118,6 +127,7 @@
       <div class="hud" id="recHud">⏺ REC</div>
       <div class="hud" id="aiHud">🎬 AI CAMERAMAN</div>
       <div class="hud" id="chanceHud">📸 シャッターチャンス！</div>
+      <div class="hud" id="bufStatus">🔴 録画中...</div>
       <div class="hud" id="modelStatus">Loading models...</div>
       <div id="shotFlash"></div>
     </div>
@@ -134,40 +144,51 @@
         <button id="btnStart" class="btn-start">▶ START</button>
         <button id="btnStop"  class="btn-stop" disabled>■ STOP</button>
       </div>
+      <label class="lbl">
+        画質：<span id="qualityVal">720p (HD)</span>
+        <select id="qualitySelect" style="width:100%; margin-top:4px;">
+          <option value="480">480p (SD)</option>
+          <option value="720" selected>720p (HD)</option>
+          <option value="1080">1080p (FHD)</option>
+          <option value="2160">2160p (4K)</option>
+        </select>
+      </label>
     </div>
 
-    <!-- AI Cameraman Master Switch -->
+    <!-- AI Cameraman -->
     <div class="section">
       <div class="section-title">AI Cameraman</div>
-      <div class="btn-row" style="margin-bottom:8px;">
-        <button id="btnAI" class="btn-ai" disabled>🎬 AI カメラマン OFF</button>
+      <div class="btn-row" style="margin-bottom:6px;">
+        <button id="btnAI" class="btn-ai" disabled>🎬 AI OFF</button>
       </div>
-      <!-- Sub-modes -->
-      <div style="display:flex;flex-wrap:wrap;gap:5px;">
-        <div class="mode-chip on" data-mode="autoframe" style="--cc:#f4d03f;">
-          <span class="mode-dot"></span>オートフレーム
-        </div>
-        <div class="mode-chip on" data-mode="pose" style="--cc:#58d68d;">
-          <span class="mode-dot"></span>ポーズ検知
-        </div>
-        <div class="mode-chip on" data-mode="smile" style="--cc:#bb8fce;">
-          <span class="mode-dot"></span>笑顔検知
-        </div>
-        <div class="mode-chip on" data-mode="still" style="--cc:#5dade2;">
-          <span class="mode-dot"></span>静止検知
-        </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px; margin-bottom:6px;">
+        <div class="mode-chip on" data-mode="autoframe" style="--cc:#d4b03f;"><span class="mode-dot"></span>フレーム</div>
+        <div class="mode-chip on" data-mode="pose" style="--cc:#4ead70;"><span class="mode-dot"></span>ポーズ</div>
+        <div class="mode-chip on" data-mode="smile" style="--cc:#a37db3;"><span class="mode-dot"></span>笑顔</div>
+        <div class="mode-chip on" data-mode="still" style="--cc:#5dade2;"><span class="mode-dot"></span>静止</div>
       </div>
-      <label class="lbl" style="margin-top:8px;">
-        フレーミング余白：<span id="paddingVal">30</span>%
+      <label class="lbl">余白：<span id="paddingVal">30</span>%
         <input type="range" id="paddingSlider" min="10" max="60" value="30">
       </label>
-      <label class="lbl">
-        平滑化強度：<span id="smoothVal">0.08</span>
+      <label class="lbl">平滑化：<span id="smoothVal">0.08</span>
         <input type="range" id="smoothSlider" min="2" max="20" value="8">
       </label>
-      <label class="lbl">
-        シャッター感度：<span id="sensVal">0.85</span>
+      <label class="lbl">感度：<span id="sensVal">0.85</span>
         <input type="range" id="sensSlider" min="60" max="98" value="85">
+      </label>
+    </div>
+
+    <!-- Auto Clip Recording -->
+    <div class="section">
+      <div class="section-title">Auto Clip Recording</div>
+      <label class="lbl">前：<span id="preVal">10</span>秒
+        <input type="range" id="preSlider" min="3" max="30" value="10">
+      </label>
+      <label class="lbl">後：<span id="postVal">3</span>秒
+        <input type="range" id="postSlider" min="1" max="15" value="3">
+      </label>
+      <label class="lbl">静止写真も同時保存：
+        <input type="checkbox" id="chkSaveStill" checked style="margin-left:6px;">
       </label>
     </div>
 
@@ -184,11 +205,11 @@
     <!-- Settings -->
     <div class="section">
       <div class="section-title">Settings</div>
-      <label class="lbl">軌跡の長さ：<span id="trailVal">40</span>
-        <input type="range" id="trail" min="5" max="120" value="40">
+      <label class="lbl">軌跡：<span id="trailVal">30</span>
+        <input type="range" id="trail" min="5" max="100" value="30">
       </label>
-      <label class="lbl" style="margin-top:6px;">バッファ（秒前）：<span id="bufVal">0.5</span>s
-        <input type="range" id="bufSlider" min="0" max="20" value="5">
+      <label class="lbl">YOLO検出（ゴルフ用）:
+        <input type="checkbox" id="chkYOLO" style="margin-left:6px;">
       </label>
     </div>
 
@@ -201,6 +222,21 @@
   </div><!-- /ctrl-area -->
 </div><!-- /app -->
 
+<!-- ===== VIDEO PLAYER MODAL ===== -->
+<div id="playerModal">
+  <div id="playerBox">
+    <video id="playerVideo" controls></video>
+    <div class="player-ctrl">
+      <button id="btnSlower">⏪ 0.5x</button>
+      <button id="btnNormal">▶ 1x</button>
+      <button id="btnFaster">⏩ 2x</button>
+      <button id="btnFramePrev">◀ コマ戻</button>
+      <button id="btnFrameNext">コマ送 ▶</button>
+      <button id="btnClosePlayer">✕ 閉じる</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════
@@ -210,6 +246,7 @@ const vid         = document.getElementById('vid');
 const canvas      = document.getElementById('canvas');
 const ctx         = canvas.getContext('2d');
 const camSelect   = document.getElementById('camSelect');
+const qualitySelect = document.getElementById('qualitySelect');
 const btnStart    = document.getElementById('btnStart');
 const btnStop     = document.getElementById('btnStop');
 const btnShot     = document.getElementById('btnShot');
@@ -221,6 +258,7 @@ const fpsHud      = document.getElementById('fpsHud');
 const recHud      = document.getElementById('recHud');
 const aiHud       = document.getElementById('aiHud');
 const chanceHud   = document.getElementById('chanceHud');
+const bufStatus   = document.getElementById('bufStatus');
 const shotFlash   = document.getElementById('shotFlash');
 const frameGuide  = document.getElementById('frameGuide');
 const trailSlider = document.getElementById('trail');
@@ -229,12 +267,26 @@ const canvasWrap  = document.getElementById('canvas-wrap');
 const paddingSlider = document.getElementById('paddingSlider');
 const smoothSlider  = document.getElementById('smoothSlider');
 const sensSlider    = document.getElementById('sensSlider');
-const bufSlider     = document.getElementById('bufSlider');
+const preSlider     = document.getElementById('preSlider');
+const postSlider    = document.getElementById('postSlider');
+const chkSaveStill  = document.getElementById('chkSaveStill');
+const chkYOLO       = document.getElementById('chkYOLO');
+
+// Player
+const playerModal = document.getElementById('playerModal');
+const playerVideo = document.getElementById('playerVideo');
+const btnSlower   = document.getElementById('btnSlower');
+const btnNormal   = document.getElementById('btnNormal');
+const btnFaster   = document.getElementById('btnFaster');
+const btnFramePrev= document.getElementById('btnFramePrev');
+const btnFrameNext= document.getElementById('btnFrameNext');
+const btnClosePlayer = document.getElementById('btnClosePlayer');
 
 // ═══════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════
 let cocoModel    = null;
+let yoloModel    = null;  // YOLOv8 (future: load from CDN or local)
 let poseDetector = null;
 let faceMesh     = null;
 let stream       = null;
@@ -249,31 +301,35 @@ let recordedChunks = [];
 let aiMode     = false;
 let subModes   = { autoframe:true, pose:true, smile:true, still:true };
 
-// 検出結果（描画ループが参照）
-let cocoDetections  = [];  // COCO-SSD
+// 検出結果
+let cocoDetections  = [];
+let yoloDetections  = [];
 let poseResults     = null;
 let faceResults     = null;
 
-// オートフレーミング smooth state
-const viewport = { sx:0, sy:0, sw:1, sh:1 }; // 正規化（0〜1）
-const smoothVp = { sx:0, sy:0, sw:1, sh:1 };  // スムージング済み
+// オートフレーミング
+const viewport = { sx:0, sy:0, sw:1, sh:1 };
+const smoothVp = { sx:0, sy:0, sw:1, sh:1 };
 
-// 軌跡
 let trails = {};
 
-// フレームバッファ（シャッターチャンス用）
-const FRAME_BUFFER = [];   // { dataUrl, ts }
-let bufSeconds = 0.5;
+// 循環バッファ（クリップ録画用）
+const CIRCULAR_BUFFER = [];   // { blob, ts }
+const MAX_BUFFER_SEC = 35;    // 最大35秒分保持
 
-// シャッターチャンス制御
+// シャッターチャンス
 let lastShotTs    = 0;
-const SHOT_COOLDOWN = 3000; // ms
+const SHOT_COOLDOWN = 3000;
 let chanceTimer   = null;
 
 // ポーズ静止検知
-const wristHistory = [];   // 直近 N フレームの [lx,ly,rx,ry]
+const wristHistory = [];
 const WRIST_HIST_LEN = 20;
 let wasMoving = false;
+
+// 録画状態（クリップ生成用）
+let clipRecording = false;
+let clipStartTs   = 0;
 
 // FPS
 let fpsFrames = 0, fpsLast = performance.now();
@@ -285,12 +341,14 @@ trailSlider.addEventListener('input', () => { trailValEl.textContent = trailSlid
 paddingSlider.addEventListener('input', () => { document.getElementById('paddingVal').textContent = paddingSlider.value; });
 smoothSlider.addEventListener('input',  () => { document.getElementById('smoothVal').textContent  = (+smoothSlider.value/100).toFixed(2); });
 sensSlider.addEventListener('input',    () => { document.getElementById('sensVal').textContent    = (+sensSlider.value/100).toFixed(2); });
-bufSlider.addEventListener('input',     () => {
-  bufSeconds = +bufSlider.value / 10;
-  document.getElementById('bufVal').textContent = bufSeconds.toFixed(1);
+preSlider.addEventListener('input',     () => { document.getElementById('preVal').textContent = preSlider.value; });
+postSlider.addEventListener('input',    () => { document.getElementById('postVal').textContent = postSlider.value; });
+qualitySelect.addEventListener('change', () => {
+  const h = qualitySelect.value;
+  const labels = { '480':'480p (SD)', '720':'720p (HD)', '1080':'1080p (FHD)', '2160':'2160p (4K)' };
+  document.getElementById('qualityVal').textContent = labels[h] || h+'p';
 });
 
-// Sub-mode chips
 document.querySelectorAll('.mode-chip').forEach(chip => {
   chip.addEventListener('click', () => {
     const m = chip.dataset.mode;
@@ -314,9 +372,8 @@ new ResizeObserver(() => { if (isRunning) syncCanvasSize(); }).observe(canvasWra
 // Init: load models
 // ═══════════════════════════════════════════════════
 async function init() {
-  modelStatus.textContent = 'COCO-SSD loading...';
+  modelStatus.textContent = 'COCO loading...';
   try {
-    // カメラ一覧
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cams = devices.filter(d => d.kind === 'videoinput');
     cams.sort((a,b) => /back|rear|environment/i.test(b.label) - /back|rear|environment/i.test(a.label));
@@ -325,19 +382,17 @@ async function init() {
     ).join('');
 
     cocoModel = await cocoSsd.load();
-    modelStatus.textContent = 'COCO-SSD ✓  MediaPipe loading...';
+    modelStatus.textContent = 'COCO ✓  MediaPipe loading...';
 
-    // MediaPipe Pose
     poseDetector = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${f}` });
     poseDetector.setOptions({ modelComplexity:1, smoothLandmarks:true, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
     poseDetector.onResults(r => { poseResults = r; });
 
-    // MediaPipe FaceMesh
     faceMesh = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}` });
     faceMesh.setOptions({ maxNumFaces:3, refineLandmarks:true, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
     faceMesh.onResults(r => { faceResults = r; });
 
-    modelStatus.textContent = 'All models ready ✓';
+    modelStatus.textContent = 'All ready ✓ (YOLO: manual load)';
   } catch(e) {
     modelStatus.textContent = 'Model error: ' + e.message;
     console.error(e);
@@ -345,20 +400,40 @@ async function init() {
 }
 init();
 
+// YOLO v8 manual load (placeholder - requires actual model file)
+chkYOLO.addEventListener('change', async () => {
+  if (chkYOLO.checked && !yoloModel) {
+    modelStatus.textContent = 'YOLO loading...';
+    try {
+      // YOLOv8-tfjs はモデルファイルのURLが必要
+      // 例: https://github.com/zldrobit/yolov8-tfjs などから model.json をホスト
+      // yoloModel = await tf.loadGraphModel('https://your-server.com/yolov8/model.json');
+      // 今回はプレースホルダーとして null のまま
+      modelStatus.textContent = 'YOLO: model file required (see code)';
+      alert('YOLOv8モデルファイル（model.json）のURLを指定してください。\n現在はプレースホルダーです。');
+      chkYOLO.checked = false;
+    } catch(e) {
+      modelStatus.textContent = 'YOLO load error';
+      chkYOLO.checked = false;
+    }
+  }
+});
+
 // ═══════════════════════════════════════════════════
 // Camera start
 // ═══════════════════════════════════════════════════
 btnStart.onclick = async () => {
   if (stream) stream.getTracks().forEach(t => t.stop());
-  trails = {}; cocoDetections = []; poseResults = null; faceResults = null;
-  FRAME_BUFFER.length = 0; wristHistory.length = 0;
+  trails = {}; cocoDetections = []; yoloDetections = []; poseResults = null; faceResults = null;
+  CIRCULAR_BUFFER.length = 0; wristHistory.length = 0;
   Object.assign(smoothVp, { sx:0, sy:0, sw:1, sh:1 });
   Object.assign(viewport, { sx:0, sy:0, sw:1, sh:1 });
 
   try {
-    let constraints = { video: { facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} } };
+    const h = +qualitySelect.value;
+    let constraints = { video: { facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:h} } };
     if (camSelect.value && !/Loading/.test(camSelect.value))
-      constraints = { video: { deviceId:{exact:camSelect.value}, width:{ideal:1280}, height:{ideal:720} } };
+      constraints = { video: { deviceId:{exact:camSelect.value}, width:{ideal:1920}, height:{ideal:h} } };
 
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     vid.srcObject = stream; await vid.play();
@@ -376,26 +451,45 @@ btnStart.onclick = async () => {
     drawLoop();
     cocoLoop();
     mediapipeLoop();
+    bufferLoop(); // 循環バッファ記録
   } catch(e) { alert('Camera Error: ' + e.message); }
 };
 
 // ═══════════════════════════════════════════════════
-// AI Cameraman toggle
+// AI toggle
 // ═══════════════════════════════════════════════════
 btnAI.onclick = () => {
   aiMode = !aiMode;
-  btnAI.textContent = aiMode ? '🎬 AI カメラマン ON' : '🎬 AI カメラマン OFF';
+  btnAI.textContent = aiMode ? '🎬 AI ON' : '🎬 AI OFF';
   btnAI.classList.toggle('on', aiMode);
   aiHud.style.display = aiMode ? 'block' : 'none';
+  bufStatus.style.display = aiMode ? 'block' : 'none';
   if (!aiMode) {
-    // リセット
     Object.assign(smoothVp, { sx:0, sy:0, sw:1, sh:1 });
     updateFrameGuide(null);
   }
 };
 
 // ═══════════════════════════════════════════════════
-// MAIN DRAW LOOP
+// CIRCULAR BUFFER LOOP（毎100ms、canvasを記録）
+// ═══════════════════════════════════════════════════
+async function bufferLoop() {
+  if (!isRunning) return;
+  if (!aiMode) { setTimeout(bufferLoop, 100); return; }
+
+  try {
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.75));
+    CIRCULAR_BUFFER.push({ blob, ts: performance.now() });
+    // MAX_BUFFER_SEC を超えたら古いものを削除
+    const cutoff = performance.now() - MAX_BUFFER_SEC * 1000;
+    while (CIRCULAR_BUFFER.length > 0 && CIRCULAR_BUFFER[0].ts < cutoff) CIRCULAR_BUFFER.shift();
+  } catch(e) {}
+
+  setTimeout(bufferLoop, 100);
+}
+
+// ═══════════════════════════════════════════════════
+// DRAW LOOP
 // ═══════════════════════════════════════════════════
 function drawLoop() {
   if (!isRunning) return;
@@ -404,38 +498,21 @@ function drawLoop() {
 
   const vw = vid.videoWidth, vh = vid.videoHeight;
 
-  // ---- オートフレーミング計算 ----
   if (aiMode && subModes.autoframe) {
     computeAutoframing(vw, vh);
   } else {
     Object.assign(smoothVp, { sx:0, sy:0, sw:1, sh:1 });
   }
 
-  // 正規化viewport → ピクセル
-  const srcX = smoothVp.sx * vw;
-  const srcY = smoothVp.sy * vh;
-  const srcW = smoothVp.sw * vw;
-  const srcH = smoothVp.sh * vh;
+  const srcX = smoothVp.sx * vw, srcY = smoothVp.sy * vh;
+  const srcW = smoothVp.sw * vw, srcH = smoothVp.sh * vh;
 
-  // 映像描画（ミラー対応）
   ctx.save();
-  if (isFrontCam) {
-    ctx.scale(-1,1);
-    ctx.drawImage(vid, srcX, srcY, srcW, srcH, -W, 0, W, H);
-  } else {
-    ctx.drawImage(vid, srcX, srcY, srcW, srcH, 0, 0, W, H);
-  }
+  if (isFrontCam) { ctx.scale(-1,1); ctx.drawImage(vid,srcX,srcY,srcW,srcH,-W,0,W,H); }
+  else            { ctx.drawImage(vid,srcX,srcY,srcW,srcH,0,0,W,H); }
   ctx.restore();
 
-  // ---- フレームバッファに保存 ----
-  if (aiMode) {
-    const now = performance.now();
-    FRAME_BUFFER.push({ ts: now, dataUrl: canvas.toDataURL('image/jpeg', 0.7) });
-    // バッファサイズを制限（最大 4秒分 @ 30fps = 120枚）
-    while (FRAME_BUFFER.length > 0 && now - FRAME_BUFFER[0].ts > 4000) FRAME_BUFFER.shift();
-  }
-
-  // ---- COCO-SSD 検出結果を描画（AIモード時は追従枠のみ） ----
+  // COCO 検出結果
   if (!aiMode) {
     cocoDetections.forEach(det => {
       if (det.classKey !== 'person') return;
@@ -445,20 +522,32 @@ function drawLoop() {
     });
   }
 
-  // ---- Pose landmarks 描画 ----
+  // YOLO 検出結果（ゴルフボール・クラブ）
+  if (yoloModel && yoloDetections.length > 0) {
+    yoloDetections.forEach(det => {
+      const { sx:px, sy:py, sw:pw, sh:ph } = detToCanvas(det.bbox, vw, vh, W, H);
+      ctx.strokeStyle = det.classKey === 'golf ball' ? '#ffff00' : '#00ffff';
+      ctx.lineWidth = 2; ctx.setLineDash([]);
+      ctx.strokeRect(px, py, pw, ph);
+      ctx.font = 'bold 11px Courier'; ctx.fillStyle = ctx.strokeStyle;
+      ctx.fillText(det.classKey, px+4, py-4);
+    });
+  }
+
+  // Pose
   if (poseResults?.poseLandmarks && aiMode) {
     drawPoseSkeleton(poseResults.poseLandmarks, W, H, srcX, srcY, srcW, srcH, vw, vh);
   }
 
-  // ---- Face Mesh 描画（目・口の輪郭） ----
+  // Face
   if (faceResults?.multiFaceLandmarks?.length && aiMode) {
     drawFaceContour(faceResults.multiFaceLandmarks[0], W, H, srcX, srcY, srcW, srcH, vw, vh);
   }
 
-  // ---- シャッターチャンス判定 ----
+  // シャッターチャンス
   if (aiMode) evaluateShutterChance();
 
-  // ---- FPS ----
+  // FPS
   fpsFrames++;
   const n = performance.now();
   if (n - fpsLast > 1000) {
@@ -470,24 +559,33 @@ function drawLoop() {
 }
 
 // ═══════════════════════════════════════════════════
-// COCO-SSD detection loop (独立・非同期)
+// COCO loop
 // ═══════════════════════════════════════════════════
 async function cocoLoop() {
   if (!isRunning) return;
   if (!cocoModel || !vid.videoWidth) { setTimeout(cocoLoop, 100); return; }
   try {
     const preds = await cocoModel.detect(vid);
-    cocoDetections = preds.map(p => ({
-      classKey: p.class,
-      bbox: p.bbox,  // [x,y,w,h] in video pixels
-      score: p.score
-    }));
+    cocoDetections = preds.map(p => ({ classKey: p.class, bbox: p.bbox, score: p.score }));
   } catch(e) {}
   if (isRunning) setTimeout(cocoLoop, 0);
 }
 
+// YOLO loop（placeholder - 実際のYOLOモデルが必要）
+async function yoloLoop() {
+  if (!isRunning || !yoloModel) return;
+  try {
+    // YOLOv8 推論コード（例）
+    // const input = tf.browser.fromPixels(vid).expandDims(0).toFloat().div(255);
+    // const output = await yoloModel.executeAsync(input);
+    // yoloDetections = parseYOLOOutput(output);  // bbox, class, score を抽出
+    yoloDetections = [];
+  } catch(e) {}
+  if (isRunning) setTimeout(yoloLoop, 100);
+}
+
 // ═══════════════════════════════════════════════════
-// MediaPipe loop (Pose + FaceMesh, 間引き)
+// MediaPipe loop
 // ═══════════════════════════════════════════════════
 let mpFrame = 0;
 async function mediapipeLoop() {
@@ -495,9 +593,7 @@ async function mediapipeLoop() {
   if (!vid.videoWidth || !poseDetector) { setTimeout(mediapipeLoop, 100); return; }
   try {
     mpFrame++;
-    // Pose: 毎フレーム
     await poseDetector.send({ image: vid });
-    // FaceMesh: 2フレームに1回（重いため間引き）
     if (mpFrame % 2 === 0 && faceMesh) await faceMesh.send({ image: vid });
   } catch(e) {}
   if (isRunning) setTimeout(mediapipeLoop, 0);
@@ -507,36 +603,28 @@ async function mediapipeLoop() {
 // AUTO FRAMING
 // ═══════════════════════════════════════════════════
 function computeAutoframing(vw, vh) {
-  // 1. メイン被写体の選定（最大面積の person）
   const persons = cocoDetections.filter(d => d.classKey === 'person');
   if (persons.length === 0) {
-    // 被写体なし → ゆっくり全体に戻す
     lerpVp(viewport, { sx:0, sy:0, sw:1, sh:1 }, 0.02);
     lerpVp(smoothVp, viewport, getSmoothAlpha());
     updateFrameGuide(null);
     return;
   }
-
-  // 中央に近い人 or 最大面積の人
   const cx = vw / 2, cy = vh / 2;
   const main = persons.reduce((best, p) => {
-    const pcx = p.bbox[0] + p.bbox[2]/2;
-    const pcy = p.bbox[1] + p.bbox[3]/2;
+    const pcx = p.bbox[0] + p.bbox[2]/2, pcy = p.bbox[1] + p.bbox[3]/2;
     const dist = Math.hypot(pcx - cx, pcy - cy);
     const area = p.bbox[2] * p.bbox[3];
-    const score = area - dist * 0.5; // 面積優先、距離ペナルティ
+    const score = area - dist * 0.5;
     return score > best.score ? { p, score } : best;
   }, { p: persons[0], score: -Infinity }).p;
 
-  // 2. 理想の表示エリアを計算（余白付き）
   const pad = +paddingSlider.value / 100;
   const [bx, by, bw, bh] = main.bbox;
-  const centerX = (bx + bw/2) / vw;
-  const centerY = (by + bh/2) / vh;
+  const centerX = (bx + bw/2) / vw, centerY = (by + bh/2) / vh;
   const normW = (bw / vw) * (1 + pad * 2);
   const normH = (bh / vh) * (1 + pad * 2);
 
-  // アスペクト比を保持（16:9）
   const aspect = 16/9;
   let fw = Math.max(normW, normH * aspect);
   let fh = fw / aspect;
@@ -544,13 +632,8 @@ function computeAutoframing(vw, vh) {
   const fx = Math.max(0, Math.min(1 - fw, centerX - fw/2));
   const fy = Math.max(0, Math.min(1 - fh, centerY - fh/2));
 
-  // 3. 目標ビューポートを更新
   lerpVp(viewport, { sx:fx, sy:fy, sw:fw, sh:fh }, 0.15);
-
-  // 4. スムージング（ローパスフィルター）
   lerpVp(smoothVp, viewport, getSmoothAlpha());
-
-  // 5. フレームガイド描画
   updateFrameGuide({ fx, fy, fw, fh });
 }
 
@@ -560,163 +643,116 @@ function lerpVp(target, goal, alpha) {
   target.sw += (goal.sw - target.sw) * alpha;
   target.sh += (goal.sh - target.sh) * alpha;
 }
+function getSmoothAlpha() { return +smoothSlider.value / 100; }
 
-function getSmoothAlpha() {
-  return +smoothSlider.value / 100; // 0.02〜0.20
-}
-
-// フレームガイド（SVGオーバーレイ）
 function updateFrameGuide(rect) {
   if (!rect || !aiMode || !subModes.autoframe) { frameGuide.innerHTML=''; return; }
   const W = canvas.width, H = canvas.height;
-  // 現在の smoothVp で目標位置を逆算してキャンバス座標に
   const gx = ((rect.fx - smoothVp.sx) / smoothVp.sw) * W;
   const gy = ((rect.fy - smoothVp.sy) / smoothVp.sh) * H;
   const gw = (rect.fw / smoothVp.sw) * W;
   const gh = (rect.fh / smoothVp.sh) * H;
   const cs = 14;
   frameGuide.innerHTML = `
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}"
-      fill="none" stroke="rgba(244,208,63,0.35)" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <line x1="${gx}" y1="${gy}" x2="${gx+cs}" y2="${gy}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx}" y1="${gy}" x2="${gx}" y2="${gy+cs}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx+gw}" y1="${gy}" x2="${gx+gw-cs}" y2="${gy}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx+gw}" y1="${gy}" x2="${gx+gw}" y2="${gy+cs}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx}" y1="${gy+gh}" x2="${gx+cs}" y2="${gy+gh}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx}" y1="${gy+gh}" x2="${gx}" y2="${gy+gh-cs}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx+gw}" y1="${gy+gh}" x2="${gx+gw-cs}" y2="${gy+gh}" stroke="#f4d03f" stroke-width="2"/>
-    <line x1="${gx+gw}" y1="${gy+gh}" x2="${gx+gw}" y2="${gy+gh-cs}" stroke="#f4d03f" stroke-width="2"/>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="none" stroke="rgba(212,176,63,0.3)" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <line x1="${gx}" y1="${gy}" x2="${gx+cs}" y2="${gy}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx}" y1="${gy}" x2="${gx}" y2="${gy+cs}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy}" x2="${gx+gw-cs}" y2="${gy}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy}" x2="${gx+gw}" y2="${gy+cs}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx}" y1="${gy+gh}" x2="${gx+cs}" y2="${gy+gh}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx}" y1="${gy+gh}" x2="${gx}" y2="${gy+gh-cs}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy+gh}" x2="${gx+gw-cs}" y2="${gy+gh}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy+gh}" x2="${gx+gw}" y2="${gy+gh-cs}" stroke="#d4b03f" stroke-width="2"/>
   `;
 }
 
 // ═══════════════════════════════════════════════════
-// POSE SKELETON 描画
+// POSE SKELETON
 // ═══════════════════════════════════════════════════
-const POSE_CONNECTIONS = [
-  [11,12],[11,13],[13,15],[12,14],[14,16],
-  [11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]
-];
-function drawPoseSkeleton(landmarks, W, H, srcX, srcY, srcW, srcH, vw, vh) {
-  const toCanvas = (lm) => {
-    const px = lm.x * vw;
-    const py = lm.y * vh;
-    return {
-      x: ((px - srcX) / srcW) * W,
-      y: ((py - srcY) / srcH) * H,
-      vis: lm.visibility
-    };
-  };
-  ctx.strokeStyle = 'rgba(88,214,141,0.7)';
-  ctx.lineWidth = 1.5;
+const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function drawPoseSkeleton(lms, W, H, sx, sy, sw, sh, vw, vh) {
+  const toC = lm => ({ x:((lm.x*vw-sx)/sw)*W, y:((lm.y*vh-sy)/sh)*H, vis:lm.visibility });
+  ctx.strokeStyle = 'rgba(78,173,112,0.65)'; ctx.lineWidth = 1.5;
   POSE_CONNECTIONS.forEach(([a,b]) => {
-    const pa = toCanvas(landmarks[a]);
-    const pb = toCanvas(landmarks[b]);
-    if (pa.vis < 0.3 || pb.vis < 0.3) return;
-    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    const pa=toC(lms[a]), pb=toC(lms[b]);
+    if(pa.vis<0.3||pb.vis<0.3) return;
+    ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
   });
-  // 関節点
   [11,12,13,14,15,16,23,24,25,26,27,28].forEach(i => {
-    const p = toCanvas(landmarks[i]);
-    if (p.vis < 0.3) return;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
-    ctx.fillStyle = '#58d68d'; ctx.fill();
+    const p=toC(lms[i]); if(p.vis<0.3) return;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fillStyle='#4ead70'; ctx.fill();
   });
 }
 
 // ═══════════════════════════════════════════════════
-// FACE CONTOUR 描画（目・口の輪郭）
+// FACE CONTOUR
 // ═══════════════════════════════════════════════════
-const LEFT_EYE  = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
-const RIGHT_EYE = [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
-const LIPS_OUTER= [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185];
-
-function drawFaceContour(landmarks, W, H, srcX, srcY, srcW, srcH, vw, vh) {
-  const toC = lm => ({
-    x: ((lm.x * vw - srcX) / srcW) * W,
-    y: ((lm.y * vh - srcY) / srcH) * H
-  });
+const LEFT_EYE=[33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
+const RIGHT_EYE=[362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
+const LIPS_OUTER=[61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185];
+function drawFaceContour(lms, W, H, sx, sy, sw, sh, vw, vh) {
+  const toC = lm => ({ x:((lm.x*vw-sx)/sw)*W, y:((lm.y*vh-sy)/sh)*H });
   [LEFT_EYE, RIGHT_EYE].forEach(idxs => {
-    ctx.beginPath();
-    idxs.forEach((i,n) => { const p=toC(landmarks[i]); n===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); });
-    ctx.closePath(); ctx.strokeStyle='rgba(187,143,206,0.7)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); idxs.forEach((i,n)=>{const p=toC(lms[i]);n===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);});
+    ctx.closePath(); ctx.strokeStyle='rgba(163,125,179,0.6)'; ctx.lineWidth=1; ctx.stroke();
   });
-  ctx.beginPath();
-  LIPS_OUTER.forEach((i,n) => { const p=toC(landmarks[i]); n===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); });
-  ctx.closePath(); ctx.strokeStyle='rgba(187,143,206,0.5)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); LIPS_OUTER.forEach((i,n)=>{const p=toC(lms[i]);n===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);});
+  ctx.closePath(); ctx.strokeStyle='rgba(163,125,179,0.5)'; ctx.lineWidth=1; ctx.stroke();
 }
 
 // ═══════════════════════════════════════════════════
-// SHUTTER CHANCE DETECTION
+// SHUTTER CHANCE
 // ═══════════════════════════════════════════════════
 function evaluateShutterChance() {
   const now = performance.now();
   if (now - lastShotTs < SHOT_COOLDOWN) return;
+  const threshold = +sensSlider.value / 100;
 
-  const threshold = +sensSlider.value / 100; // 0.6〜0.98
-
-  // A. 笑顔検知（FaceMesh の口の開き具合）
+  // 笑顔
   if (subModes.smile && faceResults?.multiFaceLandmarks?.length) {
     const lms = faceResults.multiFaceLandmarks[0];
     const smileScore = estimateSmileScore(lms);
-    if (smileScore > threshold) {
-      triggerShot('😊 笑顔検知！'); return;
-    }
+    if (smileScore > threshold) { triggerShot('😊 笑顔検知！'); return; }
   }
 
-  // B. ポーズ静止検知（激しい動きの後のピタッ）
+  // 静止
   if (subModes.still && poseResults?.poseLandmarks) {
     const lms = poseResults.poseLandmarks;
-    const lw = lms[15], rw = lms[16]; // 左右手首
+    const lw = lms[15], rw = lms[16];
     if (lw && rw && lw.visibility > 0.5 && rw.visibility > 0.5) {
       wristHistory.push([lw.x, lw.y, rw.x, rw.y]);
       if (wristHistory.length > WRIST_HIST_LEN) wristHistory.shift();
-
       if (wristHistory.length === WRIST_HIST_LEN) {
         const recent  = motionAmount(wristHistory.slice(-5));
         const earlier = motionAmount(wristHistory.slice(0, 10));
         if (earlier > 0.015 && recent < 0.004) {
           if (!wasMoving) { wasMoving = true; }
-          else {
-            triggerShot('🏌 静止検知！'); wasMoving = false; return;
-          }
-        } else if (earlier < 0.005) {
-          wasMoving = false;
-        }
+          else { triggerShot('🏌 静止検知！'); wasMoving = false; return; }
+        } else if (earlier < 0.005) { wasMoving = false; }
       }
     }
   }
 
-  // C. 万歳・ポーズ検知（両手が頭より上）
+  // ポーズ
   if (subModes.pose && poseResults?.poseLandmarks) {
     const lms = poseResults.poseLandmarks;
-    const lw = lms[15], rw = lms[16];
-    const nose = lms[0];
+    const lw = lms[15], rw = lms[16], nose = lms[0];
     if (lw && rw && nose && lw.visibility > 0.6 && rw.visibility > 0.6) {
-      if (lw.y < nose.y - 0.05 && rw.y < nose.y - 0.05) {
-        triggerShot('🙌 ポーズ検知！'); return;
-      }
+      if (lw.y < nose.y - 0.05 && rw.y < nose.y - 0.05) { triggerShot('🙌 ポーズ検知！'); return; }
     }
   }
 }
 
-// 笑顔スコア（口の縦開き / 口幅で正規化）
 function estimateSmileScore(lms) {
-  const topLip = lms[13];    // 上唇中央
-  const botLip = lms[14];    // 下唇中央
-  const leftMouth = lms[61];
-  const rightMouth = lms[291];
+  const topLip = lms[13], botLip = lms[14], leftMouth = lms[61], rightMouth = lms[291];
   const mouthOpen = Math.abs(topLip.y - botLip.y);
   const mouthWidth = Math.abs(leftMouth.x - rightMouth.x);
-  // 口の高さ/幅比率（笑顔だと下がる → 逆数で評価）
   const ratio = mouthOpen / (mouthWidth + 1e-6);
-  // 口角の上がり具合（左右の口角のy座標が口中央より低い）
   const midY = (topLip.y + botLip.y) / 2;
   const cornerLift = Math.max(0, midY - (leftMouth.y + rightMouth.y) / 2);
-  const score = Math.min(1, cornerLift * 15 + (1 - ratio * 3) * 0.5);
-  return score;
+  return Math.min(1, cornerLift * 15 + (1 - ratio * 3) * 0.5);
 }
 
-// 動き量（連続フレーム間の平均変位）
 function motionAmount(history) {
   let total = 0;
   for (let i = 1; i < history.length; i++) {
@@ -727,40 +763,105 @@ function motionAmount(history) {
 }
 
 // ═══════════════════════════════════════════════════
-// TRIGGER SHOT（バッファから0.5秒前を取得）
+// TRIGGER SHOT（静止写真 + クリップ録画開始）
 // ═══════════════════════════════════════════════════
 function triggerShot(reason) {
   const now = performance.now();
   lastShotTs = now;
 
-  // バッファから目標時刻のフレームを探す
-  const targetTs = now - bufSeconds * 1000;
-  let best = FRAME_BUFFER[FRAME_BUFFER.length - 1]; // フォールバック：最新
-  for (const f of FRAME_BUFFER) {
-    if (f.ts >= targetTs) { best = f; break; }
-  }
-
-  if (!best) return;
-
-  // フラッシュ演出
+  // フラッシュ
   shotFlash.style.opacity = '0.9';
   setTimeout(() => { shotFlash.style.opacity = '0'; }, 150);
 
-  // HUD 表示
+  // HUD
   chanceHud.textContent = '📸 ' + reason;
   chanceHud.style.display = 'block';
   clearTimeout(chanceTimer);
   chanceTimer = setTimeout(() => { chanceHud.style.display = 'none'; }, 2000);
 
-  // ギャラリーに追加（自動撮影バッジ）
-  addGallery('image', best.dataUrl, null, 'auto_'+Date.now()+'.jpg', 'auto');
+  // 静止写真（最新フレーム）
+  if (chkSaveStill.checked) {
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    addGallery('image', dataUrl, null, 'auto_'+Date.now()+'.jpg', 'auto');
+  }
+
+  // クリップ録画開始（前N秒 + 後M秒）
+  startClipRecording(now);
 }
 
 // ═══════════════════════════════════════════════════
-// COORDINATE UTILS
+// CLIP RECORDING（前10秒 + 後3秒）
+// ═══════════════════════════════════════════════════
+function startClipRecording(triggerTs) {
+  if (clipRecording) return; // 既に録画中なら無視
+  clipRecording = true;
+  clipStartTs = triggerTs;
+
+  const preSec  = +preSlider.value;
+  const postSec = +postSlider.value;
+
+  // 前N秒のフレームを取得
+  const cutoff = triggerTs - preSec * 1000;
+  const preFrames = CIRCULAR_BUFFER.filter(f => f.ts >= cutoff && f.ts <= triggerTs);
+
+  bufStatus.textContent = `🔴 クリップ録画中... (後${postSec}秒)`;
+  bufStatus.style.display = 'block';
+
+  // 後M秒を録画
+  const postFrames = [];
+  const postInterval = setInterval(() => {
+    if (!isRunning) { clearInterval(postInterval); return; }
+    canvas.toBlob(blob => {
+      postFrames.push({ blob, ts: performance.now() });
+      if (performance.now() - clipStartTs >= postSec * 1000) {
+        clearInterval(postInterval);
+        clipRecording = false;
+        bufStatus.style.display = 'none';
+        // 動画生成
+        generateClipVideo([...preFrames, ...postFrames]);
+      }
+    }, 'image/jpeg', 0.75);
+  }, 100);
+}
+
+async function generateClipVideo(frames) {
+  if (frames.length === 0) return;
+
+  // MediaRecorder でフレーム群を動画化
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = canvas.width;
+  offCanvas.height = canvas.height;
+  const offCtx = offCanvas.getContext('2d');
+
+  const stream = offCanvas.captureStream(10); // 10fps (100msごとのフレーム)
+  const mimeType = ['video/mp4','video/webm;codecs=h264','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
+  const recorder = new MediaRecorder(stream, { mimeType });
+  const chunks = [];
+
+  recorder.ondataavailable = e => { if (e.data?.size > 0) chunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    addGallery('video', url, blob, 'clip_'+Date.now()+'.'+ext, 'clip');
+  };
+
+  recorder.start();
+
+  // フレームを順次描画
+  for (const f of frames) {
+    const img = await createImageBitmap(f.blob);
+    offCtx.drawImage(img, 0, 0);
+    await new Promise(res => setTimeout(res, 100)); // 100ms待機（10fps）
+  }
+
+  recorder.stop();
+}
+
+// ═══════════════════════════════════════════════════
+// COORD UTILS
 // ═══════════════════════════════════════════════════
 function detToCanvas(bbox, vw, vh, W, H) {
-  // bbox: [x,y,w,h] in video pixels → canvas pixels (via smoothVp)
   const srcX = smoothVp.sx * vw, srcY = smoothVp.sy * vh;
   const srcW = smoothVp.sw * vw, srcH = smoothVp.sh * vh;
   return {
@@ -779,11 +880,11 @@ btnStop.onclick = () => {
   if (drawAnimId) { cancelAnimationFrame(drawAnimId); drawAnimId = null; }
   if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  cocoDetections = []; poseResults = null; faceResults = null;
-  FRAME_BUFFER.length = 0;
+  cocoDetections = []; yoloDetections = []; poseResults = null; faceResults = null;
+  CIRCULAR_BUFFER.length = 0; clipRecording = false;
   aiMode = false; btnAI.classList.remove('on');
-  btnAI.textContent = '🎬 AI カメラマン OFF';
-  aiHud.style.display = 'none'; chanceHud.style.display = 'none';
+  btnAI.textContent = '🎬 AI OFF';
+  aiHud.style.display = 'none'; chanceHud.style.display = 'none'; bufStatus.style.display = 'none';
   frameGuide.innerHTML = '';
   btnStart.disabled=false; btnStop.disabled=true;
   btnShot.disabled=true; btnRec.disabled=true; btnRecStop.disabled=true; btnAI.disabled=true;
@@ -827,29 +928,66 @@ btnRecStop.onclick = () => {
 };
 
 // ═══════════════════════════════════════════════════
-// GALLERY
+// GALLERY（クリックで再生モーダル）
 // ═══════════════════════════════════════════════════
 function addGallery(type, url, blob, filename, badge) {
   const item = document.createElement('div'); item.className='gallery-item';
   if (type==='image') {
     const img=document.createElement('img'); img.src=url; item.appendChild(img);
   } else {
-    const v=document.createElement('video'); v.src=url; v.controls=true; v.loop=true; item.appendChild(v);
+    const v=document.createElement('video'); v.src=url; item.appendChild(v);
+    // クリックでモーダルプレイヤー起動
+    item.addEventListener('click', e => {
+      if (e.target.classList.contains('dl-btn')) return;
+      openPlayer(url);
+    });
   }
   if (badge) {
-    const b=document.createElement('div');
-    b.className='badge badge-'+badge;
-    b.textContent = badge==='auto'?'AI':badge==='shot'?'SHOT':'REC';
+    const b=document.createElement('div'); b.className='badge badge-'+badge;
+    b.textContent = badge==='auto'?'AI':badge==='clip'?'CLIP':badge==='shot'?'SHOT':'REC';
     item.appendChild(b);
   }
   const dl=document.createElement('button'); dl.className='dl-btn'; dl.textContent='↓';
-  dl.onclick=()=>{
+  dl.onclick = e => {
+    e.stopPropagation();
     const a=document.createElement('a');
     a.href=blob?URL.createObjectURL(blob):url; a.download=filename; a.click();
   };
   item.appendChild(dl);
   document.getElementById('galleryGrid').prepend(item);
 }
+
+// ═══════════════════════════════════════════════════
+// VIDEO PLAYER MODAL（スロー・コマ送り）
+// ═══════════════════════════════════════════════════
+function openPlayer(url) {
+  playerVideo.src = url;
+  playerVideo.playbackRate = 1.0;
+  playerModal.classList.add('open');
+}
+
+btnSlower.onclick = () => { playerVideo.playbackRate = 0.5; };
+btnNormal.onclick = () => { playerVideo.playbackRate = 1.0; };
+btnFaster.onclick = () => { playerVideo.playbackRate = 2.0; };
+
+btnFramePrev.onclick = () => {
+  playerVideo.pause();
+  playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1/30);
+};
+btnFrameNext.onclick = () => {
+  playerVideo.pause();
+  playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1/30);
+};
+
+btnClosePlayer.onclick = () => {
+  playerVideo.pause();
+  playerVideo.src = '';
+  playerModal.classList.remove('open');
+};
+
+playerModal.addEventListener('click', e => {
+  if (e.target === playerModal) btnClosePlayer.click();
+});
 </script>
 </body>
 </html>
