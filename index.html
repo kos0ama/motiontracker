@@ -2,326 +2,378 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI & Color Tracker Pro</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AI Cameraman Pro</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
+
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0f0f0f; color: #eee;
-      font-family: 'Courier New', monospace;
-      min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; padding: 20px;
-    }
-    h1 { font-size: 16px; letter-spacing: 0.15em; color: #ff4444; margin-bottom: 14px; text-transform: uppercase; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #050505; color: #ccc; font-family: 'Courier New', monospace; overflow-x: hidden; }
 
-    .control-row {
-      display: flex; gap: 8px; margin-bottom: 8px;
-      align-items: center; flex-wrap: wrap;
-      justify-content: center; width: 100%; max-width: 720px;
+    #app { display: flex; flex-direction: column; min-height: 100dvh; }
+
+    /* Video top */
+    #video-area { position: relative; width: 100%; background: #000; flex-shrink: 0; }
+    #canvas-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #0a0a0a; overflow: hidden; }
+    #vid    { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; }
+    #canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+    /* Landscape */
+    @media (orientation: landscape) {
+      #app { flex-direction: row; height: 100dvh; overflow: hidden; }
+      #video-area { flex:1; display:flex; align-items:center; justify-content:center; min-width:0; }
+      #canvas-wrap { width:auto; height:100dvh; aspect-ratio:16/9; }
+      #ctrl-area { width:240px; flex:none; height:100dvh; overflow-y:auto; border-left:1px solid #141414; }
     }
+
+    #ctrl-area { flex:1; overflow-y:auto; padding:10px 10px 24px; display:flex; flex-direction:column; gap:7px; }
+
+    .section { background:#0d0d0d; border:1px solid #1a1a1a; border-radius:8px; padding:8px 10px; }
+    .section-title { font-size:9px; color:#3a3a3a; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:6px; font-weight:bold; }
+
     button {
-      font-family: 'Courier New', monospace; font-size: 11px;
-      padding: 6px 12px; border: 1px solid #444; border-radius: 6px;
-      background: #1a1a1a; color: #ccc; cursor: pointer; transition: all 0.15s;
+      font-family:'Courier New',monospace; font-size:11px; padding:6px 9px;
+      border:1px solid #2a2a2a; border-radius:6px; background:#151515; color:#999;
+      cursor:pointer; transition:all 0.12s; white-space:nowrap;
     }
-    button:hover:not(:disabled) { background: #2a2a2a; color: #fff; }
-    button:disabled { opacity: 0.4; cursor: default; }
-    button.active-rec { background: #8e44ad; color: #fff; border-color: #9b59b6; animation: pulse 1.2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
-    select { background: #1a1a1a; color: #ccc; border: 1px solid #444; border-radius: 4px; font-size: 11px; padding: 4px 6px; }
-    input[type=range] { accent-color: #27ae60; }
+    button:hover:not(:disabled) { background:#1f1f1f; color:#ddd; }
+    button:disabled { opacity:0.25; cursor:default; }
+    .btn-row { display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
 
-    /* ---- 追跡対象セレクター ---- */
-    #targetPanel {
-      width: 100%; max-width: 720px;
-      background: #141414; border: 1px solid #2a2a2a;
-      border-radius: 8px; padding: 10px 14px; margin-bottom: 8px;
-    }
-    #targetPanel .panel-title { font-size: 10px; color: #666; letter-spacing: 0.1em; margin-bottom: 8px; }
-    .target-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-    .target-chip {
-      display: flex; align-items: center; gap: 5px;
-      padding: 4px 10px; border: 1px solid #333; border-radius: 20px;
-      font-size: 11px; color: #888; cursor: pointer;
-      background: #1a1a1a; transition: all 0.15s; user-select: none;
-    }
-    .target-chip:hover { border-color: #555; color: #bbb; }
-    .target-chip.on {
-      border-color: var(--chip-color, #ff4444);
-      color: var(--chip-color, #ff4444);
-      background: color-mix(in srgb, var(--chip-color, #ff4444) 12%, #1a1a1a);
-    }
-    .chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--chip-color, #ff4444); opacity: 0.5; }
-    .target-chip.on .chip-dot { opacity: 1; }
+    .btn-start  { border-color:#1e5631; color:#4ead70; }
+    .btn-stop   { border-color:#7a2c2c; color:#d06b6b; }
+    .btn-shot   { border-color:#1a4a6b; color:#5dade2; }
+    .btn-rec    { border-color:#5b3a6b; color:#a37db3; }
+    .btn-rec.recording { background:#5b3a6b; color:#fff; animation:pulse 1.2s infinite; }
+    .btn-ai { border-color:#6b5a08; color:#d4b03f; }
+    .btn-ai.on { background:#2d2500; color:#f9e300; border-color:#d4b03f; }
 
-    /* ---- ズームUI ---- */
-    #zoomPanel {
-      width: 100%; max-width: 720px;
-      background: #141414; border: 1px solid #2a2a2a;
-      border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; display: none;
+    .mode-chip {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 9px; border:1px solid #242424; border-radius:20px;
+      font-size:10px; color:#555; cursor:pointer; background:#111;
+      transition:all 0.12s; user-select:none;
     }
-    #zoomPanel.visible { display: block; }
-    .zoom-row { display: flex; align-items: center; gap: 10px; }
-    .zoom-label { font-size: 12px; color: #7dcea0; min-width: 72px; letter-spacing: 0.05em; }
-    .zoom-btn {
-      width: 30px; height: 30px; border-radius: 50%; padding: 0; font-size: 16px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      border-color: #2e7d52; color: #7dcea0;
-    }
-    .zoom-btn:hover:not(:disabled) { background: #1a2e22; }
-    #zoomRange { flex: 1; accent-color: #27ae60; }
-    .zoom-reset { font-size: 10px; padding: 4px 10px; border-color: #2e7d52; color: #7dcea0; }
-    .zoom-reset:hover:not(:disabled) { background: #1a2e22; }
-    #zoomMode { font-size: 9px; color: #555; margin-top: 5px; }
+    .mode-chip.on { border-color:var(--cc,#d4b03f); color:var(--cc,#d4b03f); background:color-mix(in srgb,var(--cc,#d4b03f) 10%,#111); }
+    .mode-dot { width:5px; height:5px; border-radius:50%; background:var(--cc,#666); opacity:0.35; flex-shrink:0; }
+    .mode-chip.on .mode-dot { opacity:1; }
 
-    /* ---- Canvas ---- */
-    #canvas-wrap {
-      position: relative; border: 1px solid #2a2a2a;
-      border-radius: 10px; overflow: hidden;
-      width: 100%; max-width: 720px; aspect-ratio: 4/3; background: #111;
-    }
-    #vid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
-    #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
-    #recHud { position: absolute; top: 10px; right: 12px; color: #9b59b6; display: none; font-size: 10px; letter-spacing: 0.08em; }
-    #zoomHud { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #7dcea0; letter-spacing: 0.08em; pointer-events: none; display: none; }
-    #modelStatus { position: absolute; bottom: 10px; left: 12px; font-size: 9px; color: #555; pointer-events: none; }
-    #fpsHud { position: absolute; top: 10px; left: 12px; font-size: 9px; color: #555; pointer-events: none; }
-    #shotFlash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 0.05s; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
 
-    /* ---- ギャラリー ---- */
-    #gallery { margin-top: 16px; width: 100%; max-width: 720px; }
-    #galleryTitle { font-size: 11px; color: #555; margin-bottom: 8px; letter-spacing: 0.08em; display: none; }
-    #galleryGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-    .gallery-item { border: 1px solid #2a2a2a; border-radius: 6px; overflow: hidden; position: relative; background: #111; }
-    .gallery-item img { width: 100%; display: block; }
-    .gallery-item video { width: 100%; display: block; }
-    .dl-btn {
-      position: absolute; bottom: 4px; right: 4px; font-size: 10px; padding: 2px 7px;
-      border-radius: 4px; background: rgba(0,0,0,0.75); border: 1px solid #444; color: #ccc; cursor: pointer;
-    }
-    .type-badge {
-      position: absolute; top: 4px; left: 4px;
-      font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.05em;
-    }
-    .badge-shot { background: rgba(41,128,185,0.85); color: #aee; }
-    .badge-rec  { background: rgba(142,68,173,0.85); color: #dbd; }
+    select { background:#151515; color:#aaa; border:1px solid #2a2a2a; border-radius:4px; font-size:10px; padding:4px 6px; font-family:'Courier New',monospace; }
+    input[type=range] { accent-color:#d4b03f; width:100%; }
+    label.lbl { font-size:10px; color:#444; display:block; margin-top:5px; }
 
-    /* ---- 動画プレイヤーモーダル ---- */
+    /* HUD */
+    .hud { position:absolute; font-size:10px; letter-spacing:0.07em; pointer-events:none; }
+    #fpsHud     { top:8px; left:10px; color:#333; }
+    #recHud     { top:8px; right:10px; color:#9b59b6; display:none; }
+    #aiHud      { top:8px; left:50%; transform:translateX(-50%); color:#d4b03f; display:none; background:rgba(0,0,0,0.5); padding:2px 10px; border-radius:20px; }
+    #shotFlash  { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.05s; }
+    #modelStatus{ bottom:8px; left:10px; color:#2a2a2a; font-size:9px; }
+    #chanceHud  { bottom:30px; left:50%; transform:translateX(-50%); display:none; white-space:nowrap;
+                  background:rgba(212,176,63,0.9); color:#000; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:11px; }
+    #bufStatus  { top:30px; left:10px; color:#888; display:none; font-size:9px;
+                  background:rgba(0,0,0,0.6); padding:2px 8px; border-radius:10px; }
+    #frameGuide { position:absolute; inset:0; pointer-events:none; }
+
+    /* Gallery */
+    #galleryGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:5px; }
+    .gallery-item { border:1px solid #1a1a1a; border-radius:5px; overflow:hidden; position:relative; background:#0a0a0a; }
+    .gallery-item img { width:100%; display:block; aspect-ratio:16/9; object-fit:cover; }
+    .gallery-thumb-video { width:100%; display:block; aspect-ratio:16/9; object-fit:cover; pointer-events:none; }
+    .gallery-item-video  { cursor:pointer; }
+    .gallery-item-video:hover { border-color:#555; }
+    .play-overlay {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      pointer-events:none;
+    }
+    .play-icon {
+      width:32px; height:32px; border-radius:50%;
+      background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center;
+      font-size:14px; color:#fff;
+    }
+    .dl-btn { position:absolute; bottom:3px; right:3px; font-size:9px; padding:2px 5px; border-radius:3px; background:rgba(0,0,0,0.85); border:1px solid #444; color:#ccc; cursor:pointer; z-index:5; }
+    .gallery-item .badge { position:absolute; top:3px; left:3px; font-size:8px; padding:1px 5px; border-radius:10px; z-index:5; }
+    .badge-auto { background:rgba(212,176,63,0.9); color:#000; }
+    .badge-clip { background:rgba(88,214,141,0.9); color:#000; }
+    .badge-shot { background:rgba(93,173,226,0.85); color:#000; }
+    .badge-rec  { background:rgba(142,68,173,0.85); color:#fff; }
+
+    /* ===== Video Player Modal ===== */
     #playerModal {
-      display: none; position: fixed; inset: 0; z-index: 1000;
-      background: rgba(0,0,0,0.92); align-items: center; justify-content: center; padding: 16px;
+      display:none; position:fixed; inset:0; z-index:2000;
+      background:rgba(0,0,0,0.94); align-items:center; justify-content:center; padding:16px;
     }
-    #playerModal.open { display: flex; }
+    #playerModal.open { display:flex; }
     #playerBox {
-      background: #141414; border: 1px solid #333; border-radius: 12px; padding: 16px;
-      width: 100%; max-width: 680px;
+      background:#111; border:1px solid #2a2a2a; border-radius:12px; padding:16px;
+      width:100%; max-width:720px; max-height:95dvh; overflow-y:auto;
     }
-    #playerBox h3 { font-size: 11px; color: #888; letter-spacing: 0.1em; margin-bottom: 10px; }
-    #playerVideo { width: 100%; border-radius: 6px; background: #000; display: block; margin-bottom: 12px; }
-    .player-ctrl-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
-    .player-ctrl-row button { font-size: 11px; padding: 5px 10px; }
-    .player-ctrl-row button.active { background: #2e7d52; color: #fff; border-color: #27ae60; }
-    #playerSpeed { font-size: 11px; color: #7dcea0; min-width: 44px; }
-    #playerClose { margin-left: auto; border-color: #555; color: #888; }
-    #playerClose:hover { background: #2a2a2a; color: #fff; }
+    #playerBox h3 { font-size:10px; color:#555; letter-spacing:0.12em; margin-bottom:10px; text-transform:uppercase; }
+    #playerVideo { width:100%; border-radius:6px; background:#000; display:block; margin-bottom:10px; }
+    .player-speed-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+    .player-speed-row button { font-size:11px; padding:5px 10px; }
+    .player-speed-row button.active { background:#27ae60; color:#fff; border-color:#2ecc71; }
+    .player-frame-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .player-frame-row button { font-size:11px; padding:5px 10px; }
+    #playerClose { margin-left:auto; border-color:#555; color:#666; }
+    #playerClose:hover { background:#1a1a1a; color:#fff; }
+    #playerSpeedLabel { font-size:11px; color:#7dcea0; min-width:36px; }
   </style>
 </head>
 <body>
+<div id="app">
 
-<h1>&#9654; AI & Color Tracker Pro</h1>
-
-<div class="control-row">
-  <select id="camSelect"><option>Loading...</option></select>
-  <button id="btnStart">START</button>
-  <button id="btnStop" disabled>STOP</button>
-  <button id="btnShot" disabled style="color:#5dade2; border-color:#2980b9;">&#128247; SHOT</button>
-  <button id="btnRec" disabled>&#9210; REC</button>
-  <button id="btnRecStop" disabled>&#9209; STOP</button>
-</div>
-
-<div class="control-row">
-  <label style="font-size:10px; color:#888;">カラー検出色
-    <select id="ballColor" style="margin-left:4px;">
-      <option value="none">なし</option>
-      <option value="white">白</option>
-      <option value="orange">オレンジ</option>
-      <option value="yellow">黄色</option>
-      <option value="red">赤</option>
-    </select>
-  </label>
-  <label style="font-size:10px; color:#888;">軌跡の長さ
-    <input type="range" id="trail" min="5" max="150" value="60" style="margin-left:4px; width:80px;">
-    <span id="trailVal" style="color:#aaa;">60</span>
-  </label>
-</div>
-
-<div id="targetPanel">
-  <div class="panel-title">TRACKING TARGETS ― クリックでON/OFF（複数選択可）</div>
-  <div class="target-grid" id="targetGrid"></div>
-</div>
-
-<div id="zoomPanel">
-  <div class="zoom-row">
-    <span class="zoom-label">ZOOM &#215;<span id="zoomVal">1.0</span></span>
-    <button class="zoom-btn" id="btnZoomOut">&#8722;</button>
-    <input type="range" id="zoomRange" min="100" max="800" value="100">
-    <button class="zoom-btn" id="btnZoomIn">&#43;</button>
-    <button class="zoom-reset" id="btnZoomReset">RESET</button>
+  <!-- VIDEO -->
+  <div id="video-area">
+    <div id="canvas-wrap">
+      <video id="vid" autoplay muted playsinline></video>
+      <canvas id="canvas"></canvas>
+      <svg id="frameGuide" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="hud" id="fpsHud">-- fps</div>
+      <div class="hud" id="recHud">⏺ REC</div>
+      <div class="hud" id="aiHud">🎬 AI CAMERAMAN</div>
+      <div class="hud" id="chanceHud">📸 シャッターチャンス！</div>
+      <div class="hud" id="bufStatus"></div>
+      <div class="hud" id="modelStatus">Loading models...</div>
+      <div id="shotFlash"></div>
+    </div>
   </div>
-  <div id="zoomMode"></div>
+
+  <!-- CONTROLS -->
+  <div id="ctrl-area">
+
+    <!-- Camera -->
+    <div class="section">
+      <div class="section-title">Camera</div>
+      <select id="camSelect" style="width:100%;margin-bottom:6px;"><option>Loading...</option></select>
+      <div class="btn-row">
+        <button id="btnStart" class="btn-start">▶ START</button>
+        <button id="btnStop"  class="btn-stop" disabled>■ STOP</button>
+      </div>
+      <label class="lbl">画質
+        <select id="qualitySelect" style="width:100%;margin-top:4px;">
+          <option value="480">480p (SD)</option>
+          <option value="720" selected>720p (HD)</option>
+          <option value="1080">1080p (FHD)</option>
+          <option value="2160">2160p (4K — デバイス依存)</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- AI Cameraman -->
+    <div class="section">
+      <div class="section-title">AI Cameraman</div>
+      <div class="btn-row" style="margin-bottom:6px;">
+        <button id="btnAI" class="btn-ai" disabled>🎬 AI OFF</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+        <div class="mode-chip on" data-mode="autoframe" style="--cc:#d4b03f;"><span class="mode-dot"></span>フレーム</div>
+        <div class="mode-chip on" data-mode="pose"      style="--cc:#4ead70;"><span class="mode-dot"></span>ポーズ</div>
+        <div class="mode-chip on" data-mode="smile"     style="--cc:#a37db3;"><span class="mode-dot"></span>笑顔</div>
+        <div class="mode-chip on" data-mode="still"     style="--cc:#5dade2;"><span class="mode-dot"></span>静止</div>
+      </div>
+      <label class="lbl">余白：<span id="paddingVal">30</span>%
+        <input type="range" id="paddingSlider" min="10" max="60" value="30">
+      </label>
+      <label class="lbl">平滑化：<span id="smoothVal">0.08</span>
+        <input type="range" id="smoothSlider" min="2" max="20" value="8">
+      </label>
+      <label class="lbl">感度：<span id="sensVal">0.85</span>
+        <input type="range" id="sensSlider" min="60" max="98" value="85">
+      </label>
+    </div>
+
+    <!-- Auto Clip -->
+    <div class="section">
+      <div class="section-title">Auto Clip (静止検知時)</div>
+      <label class="lbl">前：<span id="preVal">10</span>秒
+        <input type="range" id="preSlider" min="3" max="30" value="10">
+      </label>
+      <label class="lbl">後：<span id="postVal">3</span>秒
+        <input type="range" id="postSlider" min="1" max="15" value="3">
+      </label>
+      <label class="lbl" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <input type="checkbox" id="chkSaveStill" checked> 静止写真も保存
+      </label>
+    </div>
+
+    <!-- Record / Shot -->
+    <div class="section">
+      <div class="section-title">Record / Shot</div>
+      <div class="btn-row">
+        <button id="btnShot"    class="btn-shot" disabled>📷 SHOT</button>
+        <button id="btnRec"     class="btn-rec"  disabled>⏺ REC</button>
+        <button id="btnRecStop" class="btn-rec"  disabled>⏹ STOP</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="section">
+      <div class="section-title">Settings</div>
+      <label class="lbl">軌跡：<span id="trailVal">30</span>
+        <input type="range" id="trail" min="5" max="100" value="30">
+      </label>
+    </div>
+
+    <!-- Gallery -->
+    <div class="section">
+      <div class="section-title">Gallery <span id="galleryCount" style="color:#333;"></span></div>
+      <div id="galleryGrid"></div>
+    </div>
+
+  </div>
 </div>
 
-<div id="canvas-wrap">
-  <video id="vid" autoplay muted playsinline></video>
-  <canvas id="canvas"></canvas>
-  <div id="recHud">&#9210; REC</div>
-  <div id="zoomHud">&#128269; &#215;<span id="zoomHudVal">1.0</span></div>
-  <div id="modelStatus">AI MODEL: Loading...</div>
-  <div id="fpsHud">-- fps</div>
-  <div id="shotFlash"></div>
-</div>
-
-<div id="gallery">
-  <div id="galleryTitle">SAVED FILES</div>
-  <div id="galleryGrid"></div>
-</div>
-
-<!-- ===== 動画プレイヤーモーダル ===== -->
+<!-- ===== VIDEO PLAYER MODAL ===== -->
 <div id="playerModal">
   <div id="playerBox">
-    <h3>&#9654; VIDEO PLAYER</h3>
+    <h3>▶ Video Player</h3>
     <video id="playerVideo" controls playsinline></video>
-    <div class="player-ctrl-row">
-      <button id="btn025x">&#xBC; x</button>
-      <button id="btn05x">&#xBD; x</button>
-      <button id="btn1x" class="active">1x</button>
-      <button id="btn2x">2x</button>
-      <span id="playerSpeed">1x</span>
+    <div class="player-speed-row">
+      <span style="font-size:10px;color:#555;">速度：</span>
+      <button data-rate="0.25">¼x</button>
+      <button data-rate="0.5">½x</button>
+      <button data-rate="1" class="active">1x</button>
+      <button data-rate="2">2x</button>
+      <span id="playerSpeedLabel">1x</span>
     </div>
-    <div class="player-ctrl-row">
-      <button id="btnFramePrev">&#9664;&#9664; コマ戻し</button>
-      <button id="btnFrameNext">コマ送り &#9654;&#9654;</button>
-      <button id="playerClose">&#10005; 閉じる</button>
+    <div class="player-frame-row">
+      <button id="btnFramePrev">◀◀ コマ戻し</button>
+      <button id="btnFrameNext">コマ送り ▶▶</button>
+      <button id="playerClose">✕ 閉じる</button>
     </div>
   </div>
 </div>
 
 <script>
-// =====================================================
-// DOM refs
-// =====================================================
-const vid          = document.getElementById('vid');
-const canvas       = document.getElementById('canvas');
-const ctx          = canvas.getContext('2d');
-const camSelect    = document.getElementById('camSelect');
-const ballColorSel = document.getElementById('ballColor');
-const btnStart     = document.getElementById('btnStart');
-const btnStop      = document.getElementById('btnStop');
-const btnShot      = document.getElementById('btnShot');
-const btnRec       = document.getElementById('btnRec');
-const btnRecStop   = document.getElementById('btnRecStop');
-const zoomRange    = document.getElementById('zoomRange');
-const zoomPanel    = document.getElementById('zoomPanel');
-const zoomHud      = document.getElementById('zoomHud');
-const zoomHudVal   = document.getElementById('zoomHudVal');
-const trailSlider  = document.getElementById('trail');
-const trailValEl   = document.getElementById('trailVal');
-const modelStatus  = document.getElementById('modelStatus');
-const fpsHud       = document.getElementById('fpsHud');
-const canvasWrap   = document.getElementById('canvas-wrap');
-const shotFlash    = document.getElementById('shotFlash');
+'use strict';
 
-// プレイヤーモーダル
-const playerModal  = document.getElementById('playerModal');
-const playerVideo  = document.getElementById('playerVideo');
-const playerClose  = document.getElementById('playerClose');
-const playerSpeed  = document.getElementById('playerSpeed');
-const btn025x      = document.getElementById('btn025x');
-const btn05x       = document.getElementById('btn05x');
-const btn1x        = document.getElementById('btn1x');
-const btn2x        = document.getElementById('btn2x');
-const btnFramePrev = document.getElementById('btnFramePrev');
-const btnFrameNext = document.getElementById('btnFrameNext');
+// ═══════════════════════════════════════════
+// DOM
+// ═══════════════════════════════════════════
+const vid           = document.getElementById('vid');
+const canvas        = document.getElementById('canvas');
+const ctx           = canvas.getContext('2d');
+const camSelect     = document.getElementById('camSelect');
+const qualitySelect = document.getElementById('qualitySelect');
+const btnStart      = document.getElementById('btnStart');
+const btnStop       = document.getElementById('btnStop');
+const btnShot       = document.getElementById('btnShot');
+const btnRec        = document.getElementById('btnRec');
+const btnRecStop    = document.getElementById('btnRecStop');
+const btnAI         = document.getElementById('btnAI');
+const modelStatus   = document.getElementById('modelStatus');
+const fpsHud        = document.getElementById('fpsHud');
+const recHud        = document.getElementById('recHud');
+const aiHud         = document.getElementById('aiHud');
+const chanceHud     = document.getElementById('chanceHud');
+const bufStatus     = document.getElementById('bufStatus');
+const shotFlash     = document.getElementById('shotFlash');
+const frameGuide    = document.getElementById('frameGuide');
+const trailSlider   = document.getElementById('trail');
+const trailValEl    = document.getElementById('trailVal');
+const canvasWrap    = document.getElementById('canvas-wrap');
+const paddingSlider = document.getElementById('paddingSlider');
+const smoothSlider  = document.getElementById('smoothSlider');
+const sensSlider    = document.getElementById('sensSlider');
+const preSlider     = document.getElementById('preSlider');
+const postSlider    = document.getElementById('postSlider');
+const chkSaveStill  = document.getElementById('chkSaveStill');
+const playerModal   = document.getElementById('playerModal');
+const playerVideo   = document.getElementById('playerVideo');
+const playerClose   = document.getElementById('playerClose');
+const btnFramePrev  = document.getElementById('btnFramePrev');
+const btnFrameNext  = document.getElementById('btnFrameNext');
 
-// =====================================================
-// 追跡対象定義
-// =====================================================
-const ALL_TARGETS = [
-  { key:'person',        label:'人',           color:'#e74c3c' },
-  { key:'car',           label:'車',           color:'#e67e22' },
-  { key:'bicycle',       label:'自転車',       color:'#f1c40f' },
-  { key:'motorcycle',    label:'バイク',       color:'#e67e22' },
-  { key:'bus',           label:'バス',         color:'#e74c3c' },
-  { key:'truck',         label:'トラック',     color:'#c0392b' },
-  { key:'sports ball',   label:'ボール(AI)',   color:'#2ecc71' },
-  { key:'golf club',     label:'ゴルフクラブ', color:'#1abc9c' },
-  { key:'tennis racket', label:'ラケット',     color:'#3498db' },
-  { key:'cat',           label:'猫',           color:'#9b59b6' },
-  { key:'dog',           label:'犬',           color:'#8e44ad' },
-  { key:'bird',          label:'鳥',           color:'#1abc9c' },
-  { key:'cell phone',    label:'スマホ',       color:'#95a5a6' },
-  { key:'bottle',        label:'ボトル',       color:'#27ae60' },
-  { key:'COLOR_BALL',    label:'カラーボール', color:'#ffff00' },
-];
-const DEFAULT_ON  = new Set(['person','sports ball','COLOR_BALL']);
-let activeTargets = new Set(DEFAULT_ON);
-
-const targetGrid = document.getElementById('targetGrid');
-ALL_TARGETS.forEach(t => {
-  const chip = document.createElement('div');
-  chip.className = 'target-chip' + (activeTargets.has(t.key) ? ' on' : '');
-  chip.style.setProperty('--chip-color', t.color);
-  chip.dataset.key = t.key;
-  chip.innerHTML = `<span class="chip-dot"></span>${t.label}`;
-  chip.addEventListener('click', () => {
-    if (activeTargets.has(t.key)) {
-      activeTargets.delete(t.key); chip.classList.remove('on');
-      Object.keys(trails).forEach(id => { if (id.startsWith(t.key+'_')) delete trails[id]; });
-    } else { activeTargets.add(t.key); chip.classList.add('on'); }
-  });
-  targetGrid.appendChild(chip);
-});
-
-function getTargetInfo(key) { return ALL_TARGETS.find(t => t.key === key); }
-trailSlider.addEventListener('input', () => { trailValEl.textContent = trailSlider.value; });
-
-// =====================================================
+// ═══════════════════════════════════════════
 // State
-// =====================================================
-let model         = null;
-let stream        = null;
-let drawAnimId    = null;
-let isRunning     = false;
-let zoomLevel     = 1.0;
-let currentTrack  = null;
-let nativeZoom    = false;
-let isFrontCamera = false;
+// ═══════════════════════════════════════════
+let cocoModel    = null;
+let poseDetector = null;
+let faceMesh     = null;
+let stream       = null;
+let isRunning    = false;
+let drawAnimId   = null;
+let isFrontCam   = false;
+
 let mediaRecorder  = null;
 let recordedChunks = [];
-let detections = [];
-let trails     = {};
+
+let aiMode   = false;
+let subModes = { autoframe:true, pose:true, smile:true, still:true };
+
+let cocoDetections = [];
+let poseResults    = null;
+let faceResults    = null;
+
+// オートフレーミング
+const viewport = { sx:0, sy:0, sw:1, sh:1 };
+const smoothVp = { sx:0, sy:0, sw:1, sh:1 };
+
+let trails = {};
+
+// ★ 循環バッファ（Blob単位で録画チャンクを溜める）
+// MediaRecorderを常時RUNし、チャンクをリングバッファに保持する方式
+let circRecorder   = null;  // 常時録画用MediaRecorder
+let circChunks     = [];    // { blob, ts }
+const CIRC_MAX_MS  = 35000; // 最大35秒保持
+
+// シャッターチャンス
+let lastShotTs    = 0;
+const SHOT_COOLDOWN = 3000;
+let chanceTimer   = null;
+
+// 静止検知
+const wristHistory   = [];
+const WRIST_HIST_LEN = 20;
+let wasMoving = false;
+
+// クリップ生成中フラグ
+let clipInProgress = false;
+
+// FPS
 let fpsFrames = 0, fpsLast = performance.now();
 
-// =====================================================
-// canvas サイズ同期（表示サイズ＝内部ピクセルに合わせる）
-// =====================================================
+// ═══════════════════════════════════════════
+// UI helpers
+// ═══════════════════════════════════════════
+trailSlider.addEventListener('input',   () => { trailValEl.textContent = trailSlider.value; });
+paddingSlider.addEventListener('input', () => { document.getElementById('paddingVal').textContent = paddingSlider.value; });
+smoothSlider.addEventListener('input',  () => { document.getElementById('smoothVal').textContent  = (+smoothSlider.value/100).toFixed(2); });
+sensSlider.addEventListener('input',    () => { document.getElementById('sensVal').textContent    = (+sensSlider.value/100).toFixed(2); });
+preSlider.addEventListener('input',     () => { document.getElementById('preVal').textContent  = preSlider.value; });
+postSlider.addEventListener('input',    () => { document.getElementById('postVal').textContent = postSlider.value; });
+
+document.querySelectorAll('.mode-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const m = chip.dataset.mode;
+    subModes[m] = !subModes[m];
+    chip.classList.toggle('on', subModes[m]);
+  });
+});
+
+// ═══════════════════════════════════════════
+// Canvas size sync
+// ═══════════════════════════════════════════
 function syncCanvasSize() {
-  const rect = canvasWrap.getBoundingClientRect();
-  const W = Math.round(rect.width);
-  const H = Math.round(rect.height);
-  if (canvas.width !== W || canvas.height !== H) {
-    canvas.width = W; canvas.height = H;
-  }
+  const r = canvasWrap.getBoundingClientRect();
+  const W = Math.round(r.width), H = Math.round(r.height);
+  if (canvas.width !== W || canvas.height !== H) { canvas.width=W; canvas.height=H; }
   return { W, H };
 }
 new ResizeObserver(() => { if (isRunning) syncCanvasSize(); }).observe(canvasWrap);
 
-// =====================================================
-// 初期化
-// =====================================================
+// ═══════════════════════════════════════════
+// Init models
+// ═══════════════════════════════════════════
 async function init() {
+  modelStatus.textContent = 'COCO loading...';
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cams = devices.filter(d => d.kind === 'videoinput');
@@ -329,456 +381,564 @@ async function init() {
     camSelect.innerHTML = cams.map(d =>
       `<option value="${d.deviceId}">${d.label || 'Camera '+d.deviceId.slice(0,4)}</option>`
     ).join('');
-    modelStatus.textContent = 'AI MODEL: Loading...';
-    model = await cocoSsd.load();
-    modelStatus.textContent = 'AI MODEL: Ready ✓';
-  } catch(e) { modelStatus.textContent = 'AI MODEL: Error'; }
+
+    cocoModel = await cocoSsd.load();
+    modelStatus.textContent = 'COCO ✓  Pose loading...';
+
+    poseDetector = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${f}` });
+    poseDetector.setOptions({ modelComplexity:1, smoothLandmarks:true, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
+    poseDetector.onResults(r => { poseResults = r; });
+
+    faceMesh = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}` });
+    faceMesh.setOptions({ maxNumFaces:3, refineLandmarks:true, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
+    faceMesh.onResults(r => { faceResults = r; });
+
+    modelStatus.textContent = 'All models ready ✓';
+  } catch(e) {
+    modelStatus.textContent = 'Model error: ' + e.message;
+  }
 }
 init();
 
-// =====================================================
-// カメラ起動
-// =====================================================
+// ═══════════════════════════════════════════
+// Camera start
+// ═══════════════════════════════════════════
 btnStart.onclick = async () => {
   if (stream) stream.getTracks().forEach(t => t.stop());
-  trails = {}; detections = [];
+  stopCircRecorder();
+  trails = {}; cocoDetections = []; poseResults = null; faceResults = null;
+  circChunks = []; wristHistory.length = 0;
+  Object.assign(smoothVp, {sx:0,sy:0,sw:1,sh:1});
+  Object.assign(viewport, {sx:0,sy:0,sw:1,sh:1});
 
   try {
-    // 可能な限り高解像度でリクエスト
-    let constraints = { video: {
-      facingMode: { ideal: 'environment' },
-      width:  { ideal: 4096 },
-      height: { ideal: 2160 }
-    }};
+    const h = +qualitySelect.value;
+    const w = h === 2160 ? 3840 : h === 1080 ? 1920 : h === 720 ? 1280 : 854;
+    let constraints = { video: { facingMode:{ideal:'environment'}, width:{ideal:w}, height:{ideal:h} } };
     if (camSelect.value && !/Loading/.test(camSelect.value))
-      constraints = { video: {
-        deviceId: { exact: camSelect.value },
-        width:  { ideal: 4096 },
-        height: { ideal: 2160 }
-      }};
+      constraints = { video: { deviceId:{exact:camSelect.value}, width:{ideal:w}, height:{ideal:h} } };
 
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     vid.srcObject = stream; await vid.play();
 
-    currentTrack = stream.getVideoTracks()[0];
-    const settings = currentTrack.getSettings();
-    isFrontCamera = settings.facingMode === 'user' || (currentTrack.label||'').toLowerCase().includes('front');
+    const track = stream.getVideoTracks()[0];
+    const settings = track.getSettings();
+    isFrontCam = settings.facingMode === 'user' || (track.label||'').toLowerCase().includes('front');
 
-    const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
-    if (caps.zoom) {
-      nativeZoom = true;
-      zoomRange.min = Math.round((caps.zoom.min||1)*100);
-      zoomRange.max = Math.round((caps.zoom.max||8)*100);
-      document.getElementById('zoomMode').textContent = 'ネイティブズーム対応（光学）';
-      document.getElementById('zoomMode').style.color = '#27ae60';
-    } else {
-      nativeZoom = false; zoomRange.min=100; zoomRange.max=800;
-      document.getElementById('zoomMode').textContent = 'デジタルズーム';
-      document.getElementById('zoomMode').style.color = '#666';
-    }
-    zoomRange.value = 100; applyZoom(1.0);
-    zoomPanel.classList.add('visible');
+    modelStatus.textContent = `Ready ✓ ${settings.width||'?'}×${settings.height||'?'}`;
 
     btnStart.disabled=true; btnStop.disabled=false;
-    btnShot.disabled=false; btnRec.disabled=false;
+    btnShot.disabled=false; btnRec.disabled=false; btnAI.disabled=false;
 
-    isRunning=true; fpsLast=performance.now(); fpsFrames=0;
+    isRunning=true;
+    fpsLast=performance.now(); fpsFrames=0;
     syncCanvasSize();
     drawLoop();
-    detectionLoop();
+    cocoLoop();
+    mediapipeLoop();
+    startCircRecorder(); // 常時循環録画開始
   } catch(e) { alert('Camera Error: '+e.message); }
 };
 
-// =====================================================
-// 描画ループ
-// =====================================================
+// ═══════════════════════════════════════════
+// AI toggle
+// ═══════════════════════════════════════════
+btnAI.onclick = () => {
+  aiMode = !aiMode;
+  btnAI.textContent = aiMode ? '🎬 AI ON' : '🎬 AI OFF';
+  btnAI.classList.toggle('on', aiMode);
+  aiHud.style.display = aiMode ? 'block' : 'none';
+  if (!aiMode) {
+    Object.assign(smoothVp, {sx:0,sy:0,sw:1,sh:1});
+    frameGuide.innerHTML='';
+  }
+};
+
+// ═══════════════════════════════════════════
+// ★ 循環録画（常時バックグラウンドで canvas を録画）
+// ═══════════════════════════════════════════
+function startCircRecorder() {
+  if (!canvas.captureStream) return;
+  const s = canvas.captureStream(30);
+  const mime = ['video/webm;codecs=vp9','video/webm;codecs=h264','video/webm','video/mp4']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  try { circRecorder = new MediaRecorder(s, mime ? { mimeType: mime } : {}); }
+  catch(e) { circRecorder = new MediaRecorder(s); }
+
+  circRecorder.ondataavailable = e => {
+    if (!e.data || e.data.size === 0) return;
+    const now = performance.now();
+    circChunks.push({ blob: e.data, ts: now });
+    // 古いチャンクを削除
+    const cutoff = now - CIRC_MAX_MS;
+    while (circChunks.length > 0 && circChunks[0].ts < cutoff) circChunks.shift();
+  };
+
+  circRecorder.start(500); // 500ms ごとにチャンクを収集
+}
+
+function stopCircRecorder() {
+  if (circRecorder && circRecorder.state !== 'inactive') {
+    try { circRecorder.stop(); } catch(e) {}
+  }
+  circRecorder = null;
+  circChunks = [];
+}
+
+// ═══════════════════════════════════════════
+// DRAW LOOP
+// ═══════════════════════════════════════════
 function drawLoop() {
   if (!isRunning) return;
   const { W, H } = syncCanvasSize();
-  if (!vid.videoWidth) { drawAnimId = requestAnimationFrame(drawLoop); return; }
+  if (!vid.videoWidth) { drawAnimId=requestAnimationFrame(drawLoop); return; }
 
-  const dz = nativeZoom ? 1.0 : zoomLevel;
-  const sw = vid.videoWidth/dz, sh = vid.videoHeight/dz;
-  const sx = (vid.videoWidth-sw)/2, sy = (vid.videoHeight-sh)/2;
+  const vw=vid.videoWidth, vh=vid.videoHeight;
+
+  if (aiMode && subModes.autoframe) computeAutoframing(vw, vh);
+  else Object.assign(smoothVp, {sx:0,sy:0,sw:1,sh:1});
+
+  const srcX=smoothVp.sx*vw, srcY=smoothVp.sy*vh;
+  const srcW=smoothVp.sw*vw, srcH=smoothVp.sh*vh;
 
   ctx.save();
-  if (isFrontCamera) { ctx.scale(-1,1); ctx.drawImage(vid,sx,sy,sw,sh,-W,0,W,H); }
-  else               { ctx.drawImage(vid,sx,sy,sw,sh,0,0,W,H); }
+  if (isFrontCam) { ctx.scale(-1,1); ctx.drawImage(vid,srcX,srcY,srcW,srcH,-W,0,W,H); }
+  else            { ctx.drawImage(vid,srcX,srcY,srcW,srcH,0,0,W,H); }
   ctx.restore();
 
-  // カラーボール
-  if (activeTargets.has('COLOR_BALL') && ballColorSel.value !== 'none') {
-    const cb = detectBallByColor(W, H);
-    if (cb) {
-      updateTrail('COLOR_BALL_0', cb.x, cb.y);
-      const ti = getTargetInfo('COLOR_BALL');
-      drawBox(cb.x-15, cb.y-15, 30, 30, ti.color, 'カラーボール', 1.0);
-      drawTrailLines('COLOR_BALL_0', ti.color);
-      drawCenterDot(cb.x, cb.y, ti.color);
-    }
+  if (aiMode) {
+    if (poseResults?.poseLandmarks) drawPoseSkeleton(poseResults.poseLandmarks, W,H, srcX,srcY,srcW,srcH, vw,vh);
+    if (faceResults?.multiFaceLandmarks?.length) drawFaceContour(faceResults.multiFaceLandmarks[0], W,H, srcX,srcY,srcW,srcH, vw,vh);
+    evaluateShutterChance();
   }
 
-  const maxLen = +trailSlider.value;
-  const usedIds = new Set();
-
-  detections.forEach((det, idx) => {
-    if (!activeTargets.has(det.classKey)) return;
-    const ti = getTargetInfo(det.classKey); if (!ti) return;
-    const trailId = matchOrCreateTrail(det.classKey, det.cx, det.cy, idx);
-    usedIds.add(trailId);
-    updateTrail(trailId, det.cx, det.cy, maxLen);
-    drawBox(det.bbox[0],det.bbox[1],det.bbox[2],det.bbox[3],ti.color,ti.label,det.score);
-    drawTrailLines(trailId, ti.color);
-    drawCenterDot(det.cx, det.cy, ti.color);
-  });
-
-  Object.keys(trails).forEach(id => {
-    if (id.startsWith('COLOR_BALL')) return;
-    if (!usedIds.has(id)) {
-      trails[id].age = (trails[id].age||0)+1;
-      if (trails[id].age > 30) delete trails[id];
-    }
-  });
-
   fpsFrames++;
-  const n = performance.now();
-  if (n - fpsLast > 1000) {
-    fpsHud.textContent = Math.round(fpsFrames/((n-fpsLast)/1000))+' fps';
+  const n=performance.now();
+  if (n-fpsLast>1000) {
+    fpsHud.textContent=Math.round(fpsFrames/((n-fpsLast)/1000))+' fps';
     fpsFrames=0; fpsLast=n;
   }
 
-  drawAnimId = requestAnimationFrame(drawLoop);
+  drawAnimId=requestAnimationFrame(drawLoop);
 }
 
-// =====================================================
-// AI 検出ループ
-// =====================================================
-async function detectionLoop() {
+// ═══════════════════════════════════════════
+// COCO loop
+// ═══════════════════════════════════════════
+async function cocoLoop() {
   if (!isRunning) return;
-  if (!model || !vid.videoWidth) { setTimeout(detectionLoop, 100); return; }
+  if (!cocoModel||!vid.videoWidth){setTimeout(cocoLoop,100);return;}
   try {
-    const ow=320, oh=240;
-    const off = document.createElement('canvas'); off.width=ow; off.height=oh;
-    const oc = off.getContext('2d');
-    const dz = nativeZoom ? 1.0 : zoomLevel;
-    const sw=vid.videoWidth/dz, sh=vid.videoHeight/dz;
-    const sx=(vid.videoWidth-sw)/2, sy=(vid.videoHeight-sh)/2;
-    if (isFrontCamera) { oc.save(); oc.scale(-1,1); oc.drawImage(vid,sx,sy,sw,sh,-ow,0,ow,oh); oc.restore(); }
-    else { oc.drawImage(vid,sx,sy,sw,sh,0,0,ow,oh); }
-
-    const preds = await model.detect(off);
-    const W=canvas.width, H=canvas.height;
-    const scaleX=W/ow, scaleY=H/oh;
-    detections = preds
-      .filter(p => activeTargets.has(p.class))
-      .map(p => {
-        const bx=p.bbox[0]*scaleX, by=p.bbox[1]*scaleY;
-        const bw=p.bbox[2]*scaleX, bh=p.bbox[3]*scaleY;
-        return { classKey:p.class, bbox:[bx,by,bw,bh], cx:bx+bw/2, cy:by+bh/2, score:p.score };
-      });
-  } catch(e) { console.warn('detection error',e); }
-  if (isRunning) setTimeout(detectionLoop, 0);
+    const preds = await cocoModel.detect(vid);
+    cocoDetections = preds.map(p => ({ classKey:p.class, bbox:p.bbox, score:p.score }));
+  } catch(e) {}
+  if (isRunning) setTimeout(cocoLoop,0);
 }
 
-// =====================================================
-// 軌跡ユーティリティ
-// =====================================================
-function matchOrCreateTrail(classKey, cx, cy, idx) {
-  let bestId=null, bestDist=120;
-  Object.keys(trails).forEach(id => {
-    if (!id.startsWith(classKey+'_')) return;
-    const pts=trails[id].pts; if (!pts||pts.length===0) return;
-    const last=pts[pts.length-1];
-    const d=Math.hypot(cx-last.x, cy-last.y);
-    if (d<bestDist){bestDist=d;bestId=id;}
+// ═══════════════════════════════════════════
+// MediaPipe loop
+// ═══════════════════════════════════════════
+let mpFrame=0;
+async function mediapipeLoop() {
+  if (!isRunning) return;
+  if (!vid.videoWidth||!poseDetector){setTimeout(mediapipeLoop,100);return;}
+  try {
+    mpFrame++;
+    await poseDetector.send({ image:vid });
+    if (mpFrame%2===0 && faceMesh) await faceMesh.send({ image:vid });
+  } catch(e) {}
+  if (isRunning) setTimeout(mediapipeLoop,0);
+}
+
+// ═══════════════════════════════════════════
+// AUTO FRAMING
+// ═══════════════════════════════════════════
+function computeAutoframing(vw,vh) {
+  const persons = cocoDetections.filter(d=>d.classKey==='person');
+  if (persons.length===0) { lerpVp(viewport,{sx:0,sy:0,sw:1,sh:1},0.02); lerpVp(smoothVp,viewport,getSmoothAlpha()); updateFrameGuide(null); return; }
+  const cx=vw/2, cy=vh/2;
+  const main = persons.reduce((best,p) => {
+    const pcx=p.bbox[0]+p.bbox[2]/2, pcy=p.bbox[1]+p.bbox[3]/2;
+    const score=p.bbox[2]*p.bbox[3] - Math.hypot(pcx-cx,pcy-cy)*0.5;
+    return score>best.score ? {p,score} : best;
+  },{p:persons[0],score:-Infinity}).p;
+
+  const pad=+paddingSlider.value/100;
+  const [bx,by,bw,bh]=main.bbox;
+  const centerX=(bx+bw/2)/vw, centerY=(by+bh/2)/vh;
+  const normW=(bw/vw)*(1+pad*2), normH=(bh/vh)*(1+pad*2);
+  const aspect=16/9;
+  let fw=Math.max(normW,normH*aspect), fh=fw/aspect;
+  fw=Math.min(fw,1); fh=Math.min(fh,1);
+  const fx=Math.max(0,Math.min(1-fw,centerX-fw/2));
+  const fy=Math.max(0,Math.min(1-fh,centerY-fh/2));
+  lerpVp(viewport,{sx:fx,sy:fy,sw:fw,sh:fh},0.15);
+  lerpVp(smoothVp,viewport,getSmoothAlpha());
+  updateFrameGuide({fx,fy,fw,fh});
+}
+function lerpVp(t,g,a){t.sx+=(g.sx-t.sx)*a;t.sy+=(g.sy-t.sy)*a;t.sw+=(g.sw-t.sw)*a;t.sh+=(g.sh-t.sh)*a;}
+function getSmoothAlpha(){return +smoothSlider.value/100;}
+function updateFrameGuide(rect){
+  if(!rect||!aiMode||!subModes.autoframe){frameGuide.innerHTML='';return;}
+  const W=canvas.width,H=canvas.height;
+  const gx=((rect.fx-smoothVp.sx)/smoothVp.sw)*W, gy=((rect.fy-smoothVp.sy)/smoothVp.sh)*H;
+  const gw=(rect.fw/smoothVp.sw)*W, gh=(rect.fh/smoothVp.sh)*H, cs=14;
+  frameGuide.innerHTML=`
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="none" stroke="rgba(212,176,63,0.3)" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <line x1="${gx}" y1="${gy}" x2="${gx+cs}" y2="${gy}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx}" y1="${gy}" x2="${gx}" y2="${gy+cs}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy}" x2="${gx+gw-cs}" y2="${gy}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy}" x2="${gx+gw}" y2="${gy+cs}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx}" y1="${gy+gh}" x2="${gx+cs}" y2="${gy+gh}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx}" y1="${gy+gh}" x2="${gx}" y2="${gy+gh-cs}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy+gh}" x2="${gx+gw-cs}" y2="${gy+gh}" stroke="#d4b03f" stroke-width="2"/>
+    <line x1="${gx+gw}" y1="${gy+gh}" x2="${gx+gw}" y2="${gy+gh-cs}" stroke="#d4b03f" stroke-width="2"/>`;
+}
+
+// ═══════════════════════════════════════════
+// POSE SKELETON
+// ═══════════════════════════════════════════
+const POSE_CONN=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function drawPoseSkeleton(lms,W,H,sx,sy,sw,sh,vw,vh){
+  const toC=lm=>({x:((lm.x*vw-sx)/sw)*W,y:((lm.y*vh-sy)/sh)*H,vis:lm.visibility});
+  ctx.strokeStyle='rgba(78,173,112,0.65)'; ctx.lineWidth=1.5;
+  POSE_CONN.forEach(([a,b])=>{
+    const pa=toC(lms[a]),pb=toC(lms[b]);
+    if(pa.vis<0.3||pb.vis<0.3)return;
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();
   });
-  if (bestId){trails[bestId].age=0;return bestId;}
-  const newId=classKey+'_'+Date.now()+'_'+idx;
-  trails[newId]={pts:[],age:0}; return newId;
+  [11,12,13,14,15,16,23,24,25,26,27,28].forEach(i=>{
+    const p=toC(lms[i]);if(p.vis<0.3)return;
+    ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fillStyle='#4ead70';ctx.fill();
+  });
 }
-function updateTrail(id, cx, cy, maxLen) {
-  if (!trails[id]) trails[id]={pts:[],age:0};
-  trails[id].pts.push({x:cx,y:cy});
-  if (maxLen && trails[id].pts.length>maxLen) trails[id].pts.shift();
-  trails[id].age=0;
+
+// ═══════════════════════════════════════════
+// FACE CONTOUR
+// ═══════════════════════════════════════════
+const L_EYE=[33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
+const R_EYE=[362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
+const LIPS=[61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185];
+function drawFaceContour(lms,W,H,sx,sy,sw,sh,vw,vh){
+  const toC=lm=>({x:((lm.x*vw-sx)/sw)*W,y:((lm.y*vh-sy)/sh)*H});
+  [L_EYE,R_EYE].forEach(idx=>{
+    ctx.beginPath();idx.forEach((i,n)=>{const p=toC(lms[i]);n===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);});
+    ctx.closePath();ctx.strokeStyle='rgba(163,125,179,0.6)';ctx.lineWidth=1;ctx.stroke();
+  });
+  ctx.beginPath();LIPS.forEach((i,n)=>{const p=toC(lms[i]);n===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);});
+  ctx.closePath();ctx.strokeStyle='rgba(163,125,179,0.5)';ctx.lineWidth=1;ctx.stroke();
 }
-function drawTrailLines(id, color) {
-  const entry=trails[id]; if(!entry) return;
-  const pts=entry.pts; if(pts.length<2) return;
-  for(let i=1;i<pts.length;i++){
-    const alpha=i/pts.length;
-    ctx.beginPath(); ctx.moveTo(pts[i-1].x,pts[i-1].y); ctx.lineTo(pts[i].x,pts[i].y);
-    ctx.strokeStyle=hexAlpha(color,alpha*0.9); ctx.lineWidth=1+alpha*3;
-    ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+
+// ═══════════════════════════════════════════
+// SHUTTER CHANCE
+// ═══════════════════════════════════════════
+function evaluateShutterChance(){
+  const now=performance.now();
+  if(now-lastShotTs<SHOT_COOLDOWN)return;
+  const threshold=+sensSlider.value/100;
+
+  if(subModes.smile&&faceResults?.multiFaceLandmarks?.length){
+    if(estimateSmileScore(faceResults.multiFaceLandmarks[0])>threshold){triggerShot('😊 笑顔検知！');return;}
+  }
+  if(subModes.still&&poseResults?.poseLandmarks){
+    const lms=poseResults.poseLandmarks;
+    const lw=lms[15],rw=lms[16];
+    if(lw&&rw&&lw.visibility>0.5&&rw.visibility>0.5){
+      wristHistory.push([lw.x,lw.y,rw.x,rw.y]);
+      if(wristHistory.length>WRIST_HIST_LEN)wristHistory.shift();
+      if(wristHistory.length===WRIST_HIST_LEN){
+        const recent=motionAmount(wristHistory.slice(-5));
+        const earlier=motionAmount(wristHistory.slice(0,10));
+        if(earlier>0.015&&recent<0.004){
+          if(!wasMoving)wasMoving=true;
+          else{triggerShot('🏌 静止検知！');wasMoving=false;return;}
+        }else if(earlier<0.005)wasMoving=false;
+      }
+    }
+  }
+  if(subModes.pose&&poseResults?.poseLandmarks){
+    const lms=poseResults.poseLandmarks;
+    const lw=lms[15],rw=lms[16],nose=lms[0];
+    if(lw&&rw&&nose&&lw.visibility>0.6&&rw.visibility>0.6&&lw.y<nose.y-0.05&&rw.y<nose.y-0.05){
+      triggerShot('🙌 ポーズ検知！');return;
+    }
   }
 }
-function drawCenterDot(cx,cy,color){
-  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
-  ctx.beginPath(); ctx.arc(cx,cy,11,0,Math.PI*2);
-  ctx.strokeStyle=hexAlpha(color,0.4); ctx.lineWidth=1.5; ctx.stroke();
+
+function estimateSmileScore(lms){
+  const tl=lms[13],bl=lms[14],lm=lms[61],rm=lms[291];
+  const open=Math.abs(tl.y-bl.y), width=Math.abs(lm.x-rm.x);
+  const ratio=open/(width+1e-6);
+  const midY=(tl.y+bl.y)/2;
+  const lift=Math.max(0,midY-(lm.y+rm.y)/2);
+  return Math.min(1,lift*15+(1-ratio*3)*0.5);
 }
-function drawBox(bx,by,bw,bh,color,label,score){
-  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.setLineDash([]); ctx.strokeRect(bx,by,bw,bh);
-  const cx=bx+bw/2,cy=by+bh/2;
-  ctx.strokeStyle=hexAlpha(color,0.5); ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(cx-8,cy); ctx.lineTo(cx+8,cy); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx,cy-8); ctx.lineTo(cx,cy+8); ctx.stroke();
-  ctx.font='bold 11px Courier New';
-  const txt=label+(score<1?' '+Math.round(score*100)+'%':'');
-  const tw=ctx.measureText(txt).width+8;
-  ctx.fillStyle=color; ctx.fillRect(bx,by-16,tw,16);
-  ctx.fillStyle='#000'; ctx.fillText(txt,bx+4,by-4);
-}
-function hexAlpha(hex,alpha){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+function motionAmount(h){
+  let t=0;
+  for(let i=1;i<h.length;i++){const p=h[i-1],c=h[i];t+=Math.hypot(c[0]-p[0],c[1]-p[1])+Math.hypot(c[2]-p[2],c[3]-p[3]);}
+  return t/Math.max(1,h.length-1);
 }
 
-// =====================================================
-// カラーボール検出
-// =====================================================
-function detectBallByColor(W, H) {
-  if (!vid.videoWidth) return null;
-  const ow=160,oh=120;
-  const off=document.createElement('canvas'); off.width=ow; off.height=oh;
-  off.getContext('2d').drawImage(vid,0,0,ow,oh);
-  const data=off.getContext('2d').getImageData(0,0,ow,oh).data;
-  const target=ballColorSel.value;
-  let sx=0,sy=0,cnt=0;
-  for(let y=0;y<oh;y+=2){for(let x=0;x<ow;x+=2){
-    const i=(y*ow+x)*4; const r=data[i],g=data[i+1],b=data[i+2]; let m=false;
-    if(target==='white'  &&r>210&&g>210&&b>210) m=true;
-    if(target==='orange' &&r>200&&g>90&&g<170&&b<80) m=true;
-    if(target==='yellow' &&r>200&&g>200&&b<100) m=true;
-    if(target==='red'    &&r>160&&g<80&&b<80) m=true;
-    if(m){sx+=x;sy+=y;cnt++;}
-  }}
-  if(cnt<5) return null;
-  return{x:(sx/cnt)/ow*W, y:(sy/cnt)/oh*H};
+// ═══════════════════════════════════════════
+// TRIGGER: 静止写真 + クリップ動画
+// ═══════════════════════════════════════════
+function triggerShot(reason){
+  const now=performance.now();
+  lastShotTs=now;
+
+  // フラッシュ
+  shotFlash.style.opacity='0.9';
+  setTimeout(()=>{shotFlash.style.opacity='0';},150);
+
+  // HUD
+  chanceHud.textContent='📸 '+reason;
+  chanceHud.style.display='block';
+  clearTimeout(chanceTimer);
+  chanceTimer=setTimeout(()=>{chanceHud.style.display='none';},2500);
+
+  // ★ 静止写真：カメラ実解像度で保存
+  if(chkSaveStill.checked) saveHighResShot('auto');
+
+  // ★ クリップ動画（循環バッファ + 後N秒）
+  if(!clipInProgress) buildClipVideo(now);
 }
 
-// =====================================================
-// ズーム
-// =====================================================
-function applyZoom(v){
-  v=Math.max(1.0,Math.min(8.0,v)); zoomLevel=v;
-  const disp=v.toFixed(1);
-  document.getElementById('zoomVal').textContent=disp;
-  zoomHudVal.textContent=disp; zoomRange.value=Math.round(v*100);
-  zoomHud.style.display=v>1.0?'block':'none';
-  if(nativeZoom&&currentTrack){try{currentTrack.applyConstraints({advanced:[{zoom:v}]});}catch(e){}}
+// ═══════════════════════════════════════════
+// ★ 高解像度静止写真保存
+//   vid の実解像度でオフスクリーンcanvasを作成し
+//   オートフレーミングのビューポートを適用して保存
+// ═══════════════════════════════════════════
+function saveHighResShot(badge){
+  if(!vid.videoWidth)return;
+
+  const vw=vid.videoWidth, vh=vid.videoHeight;
+  // オートフレーミングのビューポート（正規化）→ 実ピクセル
+  const srcX=smoothVp.sx*vw, srcY=smoothVp.sy*vh;
+  const srcW=smoothVp.sw*vw, srcH=smoothVp.sh*vh;
+
+  // ★ カメラ実解像度のオフスクリーンcanvas（縮小なし）
+  const hiC=document.createElement('canvas');
+  hiC.width  = Math.round(srcW);
+  hiC.height = Math.round(srcH);
+  const hiCtx=hiC.getContext('2d');
+
+  // 映像を実解像度で描画
+  hiCtx.save();
+  if(isFrontCam){
+    hiCtx.scale(-1,1);
+    hiCtx.drawImage(vid,srcX,srcY,srcW,srcH,-hiC.width,0,hiC.width,hiC.height);
+  }else{
+    hiCtx.drawImage(vid,srcX,srcY,srcW,srcH,0,0,hiC.width,hiC.height);
+  }
+  hiCtx.restore();
+
+  // 表示用canvasのオーバーレイを実解像度にスケールして重ねる
+  const scX=hiC.width/canvas.width, scY=hiC.height/canvas.height;
+  hiCtx.save();
+  hiCtx.scale(scX,scY);
+  hiCtx.drawImage(canvas,0,0);
+  hiCtx.restore();
+
+  // PNG保存（無劣化）
+  hiC.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const ts=new Date().toISOString().replace(/[:.]/g,'-');
+    const fname=`shot_${ts}.png`;
+    // 自動ダウンロード
+    const a=document.createElement('a');a.href=url;a.download=fname;a.click();
+    // ギャラリー
+    addGalleryItem('image', url, blob, fname, badge==='auto'?'badge-auto':'badge-shot', null);
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+  },'image/png');
 }
-zoomRange.addEventListener('input',()=>applyZoom(+zoomRange.value/100));
-document.getElementById('btnZoomIn').onclick    =()=>applyZoom(zoomLevel+0.5);
-document.getElementById('btnZoomOut').onclick   =()=>applyZoom(zoomLevel-0.5);
-document.getElementById('btnZoomReset').onclick =()=>applyZoom(1.0);
 
-let lastPinchDist=null;
-canvasWrap.addEventListener('touchstart',e=>{if(e.touches.length===2)lastPinchDist=pDist(e.touches);},{passive:true});
-canvasWrap.addEventListener('touchmove',e=>{if(e.touches.length===2&&lastPinchDist){const d=pDist(e.touches);applyZoom(zoomLevel+(d-lastPinchDist)/200);lastPinchDist=d;}},{passive:true});
-canvasWrap.addEventListener('touchend',e=>{if(e.touches.length<2)lastPinchDist=null;});
-function pDist(t){const dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy);}
+// ═══════════════════════════════════════════
+// ★ クリップ動画生成（循環バッファ + 後N秒録画）
+//   circChunks（前N秒のwebmチャンク）＋ 後N秒のリアルタイム録画を
+//   1つのBlobに結合してギャラリーに1件追加
+// ═══════════════════════════════════════════
+function buildClipVideo(triggerTs){
+  if(clipInProgress)return;
+  clipInProgress=true;
 
-// =====================================================
-// 停止
-// =====================================================
+  const preSec  = +preSlider.value;
+  const postSec = +postSlider.value;
+  const mime    = circRecorder?.mimeType || 'video/webm';
+  const ext     = mime.includes('mp4')?'mp4':'webm';
+
+  // 前N秒分のチャンクを抽出
+  const cutoff = triggerTs - preSec*1000;
+  const preBlobs = circChunks
+    .filter(c=>c.ts>=cutoff)
+    .map(c=>c.blob);
+
+  bufStatus.textContent=`⏺ クリップ後${postSec}秒録画中...`;
+  bufStatus.style.display='block';
+
+  // 後N秒をリアルタイム録画
+  const postBlobs=[];
+  const postStream = canvas.captureStream(30);
+  let postRec;
+  try{ postRec=new MediaRecorder(postStream,{mimeType:mime}); }
+  catch(e){ postRec=new MediaRecorder(postStream); }
+
+  postRec.ondataavailable=e=>{if(e.data?.size>0)postBlobs.push(e.data);};
+  postRec.onstop=()=>{
+    // 前後のチャンクを結合して1本の動画に
+    const allBlobs=[...preBlobs,...postBlobs];
+    const finalBlob=new Blob(allBlobs,{type:mime});
+    const url=URL.createObjectURL(finalBlob);
+    const ts=new Date().toISOString().replace(/[:.]/g,'-');
+    const fname=`clip_${ts}.${ext}`;
+
+    addGalleryItem('video', url, finalBlob, fname, 'badge-clip', null);
+    bufStatus.style.display='none';
+    clipInProgress=false;
+  };
+
+  postRec.start(200);
+  setTimeout(()=>{ postRec.stop(); }, postSec*1000);
+}
+
+// ═══════════════════════════════════════════
+// STOP
+// ═══════════════════════════════════════════
 btnStop.onclick=()=>{
   isRunning=false;
   if(drawAnimId){cancelAnimationFrame(drawAnimId);drawAnimId=null;}
   if(mediaRecorder?.state==='recording')mediaRecorder.stop();
+  stopCircRecorder();
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
-  currentTrack=null; detections=[]; trails={};
-  zoomPanel.classList.remove('visible'); zoomHud.style.display='none';
-  btnStart.disabled=false; btnStop.disabled=true;
-  btnShot.disabled=true; btnRec.disabled=true; btnRecStop.disabled=true;
+  cocoDetections=[];poseResults=null;faceResults=null;circChunks=[];
+  aiMode=false;btnAI.classList.remove('on');btnAI.textContent='🎬 AI OFF';
+  aiHud.style.display='none';chanceHud.style.display='none';bufStatus.style.display='none';
+  frameGuide.innerHTML='';
+  btnStart.disabled=false;btnStop.disabled=true;
+  btnShot.disabled=true;btnRec.disabled=true;btnRecStop.disabled=true;btnAI.disabled=true;
   ctx.clearRect(0,0,canvas.width,canvas.height);
 };
 
-// =====================================================
-// ★ スクリーンショット（カメラ実解像度・正しいアスペクト比）
-// =====================================================
-btnShot.onclick = () => {
-  // フラッシュ演出
-  shotFlash.style.opacity = '0.9';
-  setTimeout(() => { shotFlash.style.opacity = '0'; }, 150);
-
-  if (!vid.videoWidth) return;
-
-  // ★ オフスクリーンcanvasをカメラの実解像度で作成
-  const vw = vid.videoWidth;
-  const vh = vid.videoHeight;
-
-  // デジタルズーム適用後のソース領域
-  const dz = nativeZoom ? 1.0 : zoomLevel;
-  const srcW = vw / dz, srcH = vh / dz;
-  const srcX = (vw - srcW) / 2, srcY = (vh - srcH) / 2;
-
-  // オフスクリーンcanvas = カメラ実解像度（縮小なし）
-  const hiCanvas = document.createElement('canvas');
-  hiCanvas.width  = Math.round(srcW);  // ズーム後の実ピクセル幅
-  hiCanvas.height = Math.round(srcH);  // ズーム後の実ピクセル高さ
-  const hiCtx = hiCanvas.getContext('2d');
-
-  // ★ 映像をカメラ解像度そのままで描画（ミラー対応）
-  hiCtx.save();
-  if (isFrontCamera) {
-    hiCtx.scale(-1, 1);
-    hiCtx.drawImage(vid, srcX, srcY, srcW, srcH, -hiCanvas.width, 0, hiCanvas.width, hiCanvas.height);
-  } else {
-    hiCtx.drawImage(vid, srcX, srcY, srcW, srcH, 0, 0, hiCanvas.width, hiCanvas.height);
-  }
-  hiCtx.restore();
-
-  // ★ 表示用canvasの追跡オーバーレイを実解像度にスケールして重ねる
-  const scaleX = hiCanvas.width  / canvas.width;
-  const scaleY = hiCanvas.height / canvas.height;
-  hiCtx.save();
-  hiCtx.scale(scaleX, scaleY);
-  hiCtx.drawImage(canvas, 0, 0);
-  hiCtx.restore();
-
-  // PNG で保存（画質劣化なし）
-  hiCanvas.toBlob(blob => {
-    const url = URL.createObjectURL(blob);
-    const ts  = new Date().toISOString().replace(/[:.]/g,'-');
-    const filename = `shot_${ts}.png`;
-
-    // 自動ダウンロード
-    const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
-
-    // ギャラリーに追加
-    addGalleryImage(url, filename);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }, 'image/png');
+// ═══════════════════════════════════════════
+// ★ 手動SHOT（高解像度）
+// ═══════════════════════════════════════════
+btnShot.onclick=()=>{
+  shotFlash.style.opacity='0.9';
+  setTimeout(()=>{shotFlash.style.opacity='0';},150);
+  saveHighResShot('manual');
 };
 
-function addGalleryImage(url, filename) {
-  document.getElementById('galleryTitle').style.display='block';
-  const item = document.createElement('div'); item.className='gallery-item';
-  const badge = document.createElement('div'); badge.className='type-badge badge-shot'; badge.textContent='SHOT';
-  const img   = document.createElement('img'); img.src=url;
-  const dl    = document.createElement('button'); dl.className='dl-btn'; dl.textContent='↓';
-  dl.onclick  = () => { const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); };
-  item.appendChild(badge); item.appendChild(img); item.appendChild(dl);
-  document.getElementById('galleryGrid').prepend(item);
-}
-
-// =====================================================
-// ★ 録画（canvas.captureStream → 1本の動画、ギャラリーに1件）
-// =====================================================
-btnRec.onclick = () => {
-  recordedChunks = [];
-
-  // canvas.captureStream() はcanvasの実ピクセルを録画する
-  const stream30 = canvas.captureStream(30);
-  const mimeType = ['video/mp4','video/webm;codecs=h264','video/webm;codecs=vp9','video/webm']
-    .find(t => MediaRecorder.isTypeSupported(t)) || '';
-
-  try { mediaRecorder = new MediaRecorder(stream30, mimeType ? { mimeType } : {}); }
-  catch(e) { mediaRecorder = new MediaRecorder(stream30); }
-
-  mediaRecorder.ondataavailable = e => { if (e.data?.size>0) recordedChunks.push(e.data); };
-  mediaRecorder.onstop = () => {
-    const mType = mediaRecorder.mimeType || 'video/webm';
-    const ext   = mType.includes('mp4') ? 'mp4' : 'webm';
-    const blob  = new Blob(recordedChunks, { type: mType });
-    const url   = URL.createObjectURL(blob);
-    const ts    = new Date().toISOString().replace(/[:.]/g,'-');
-    const filename = `rec_${ts}.${ext}`;
-
-    // ★ ギャラリーに動画として1件だけ追加（プレイヤーで開く）
-    addGalleryVideo(url, blob, filename);
+// ═══════════════════════════════════════════
+// ★ 手動REC（1本の動画としてギャラリーに追加）
+// ═══════════════════════════════════════════
+btnRec.onclick=()=>{
+  recordedChunks=[];
+  const mime=['video/mp4','video/webm;codecs=h264','video/webm;codecs=vp9','video/webm']
+    .find(t=>MediaRecorder.isTypeSupported(t))||'';
+  try{mediaRecorder=new MediaRecorder(canvas.captureStream(30),mime?{mimeType:mime}:{});}
+  catch(e){mediaRecorder=new MediaRecorder(canvas.captureStream(30));}
+  mediaRecorder.ondataavailable=e=>{if(e.data?.size>0)recordedChunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const m=mediaRecorder.mimeType||'video/webm';
+    const ext=m.includes('mp4')?'mp4':'webm';
+    const blob=new Blob(recordedChunks,{type:m});
+    const url=URL.createObjectURL(blob);
+    const ts=new Date().toISOString().replace(/[:.]/g,'-');
+    addGalleryItem('video',url,blob,`rec_${ts}.${ext}`,'badge-rec',null);
   };
-
-  mediaRecorder.start(100); // 100ms ごとにチャンクを収集
-  btnRec.disabled=true; btnRecStop.disabled=false;
-  btnRec.classList.add('active-rec');
-  document.getElementById('recHud').style.display='block';
+  mediaRecorder.start(100);
+  btnRec.disabled=true;btnRecStop.disabled=false;
+  btnRec.classList.add('recording');
+  recHud.style.display='block';
 };
 
-btnRecStop.onclick = () => {
+btnRecStop.onclick=()=>{
   mediaRecorder.stop();
-  btnRec.disabled=false; btnRecStop.disabled=true;
-  btnRec.classList.remove('active-rec');
-  document.getElementById('recHud').style.display='none';
+  btnRec.disabled=false;btnRecStop.disabled=true;
+  btnRec.classList.remove('recording');
+  recHud.style.display='none';
 };
 
-function addGalleryVideo(url, blob, filename) {
-  document.getElementById('galleryTitle').style.display='block';
-  const item  = document.createElement('div'); item.className='gallery-item';
-  const badge = document.createElement('div'); badge.className='type-badge badge-rec'; badge.textContent='REC';
+// ═══════════════════════════════════════════
+// ★ ギャラリー（写真は画像表示、動画はサムネイル＋タップでプレイヤー）
+// ═══════════════════════════════════════════
+let galleryCount=0;
+function addGalleryItem(type, url, blob, fname, badgeClass, _unused){
+  galleryCount++;
+  document.getElementById('galleryCount').textContent=`(${galleryCount})`;
 
-  // サムネイル代わりに小さいvideoタグ（autoplayなし・静止）
-  const thumb = document.createElement('video');
-  thumb.src = url;
-  thumb.muted = true;
-  thumb.playsInline = true;
-  // 先頭フレームをサムネイルとして表示
-  thumb.currentTime = 0.1;
-  thumb.style.pointerEvents = 'none';
+  const item=document.createElement('div');
+  item.className='gallery-item';
 
-  // ★ クリックでモーダルプレイヤーを開く（動画として再生）
-  item.style.cursor = 'pointer';
-  item.addEventListener('click', e => {
-    if (e.target === dl) return;
-    openPlayer(url);
-  });
+  const badge=document.createElement('div');
+  badge.className='badge '+badgeClass;
+  badge.textContent=badgeClass==='badge-auto'?'AI':badgeClass==='badge-clip'?'CLIP':badgeClass==='badge-shot'?'SHOT':'REC';
+  item.appendChild(badge);
 
-  const dl = document.createElement('button'); dl.className='dl-btn'; dl.textContent='↓';
-  dl.onclick = e => {
+  if(type==='image'){
+    const img=document.createElement('img'); img.src=url; item.appendChild(img);
+  } else {
+    // ★ 動画：サムネイル用videoタグ（操作不可）+ 再生アイコン
+    item.classList.add('gallery-item-video');
+    const thumb=document.createElement('video');
+    thumb.className='gallery-thumb-video';
+    thumb.src=url; thumb.muted=true; thumb.playsInline=true;
+    thumb.currentTime=0.5; // サムネイルフレーム
+    item.appendChild(thumb);
+
+    const overlay=document.createElement('div'); overlay.className='play-overlay';
+    const icon=document.createElement('div');    icon.className='play-icon'; icon.textContent='▶';
+    overlay.appendChild(icon); item.appendChild(overlay);
+
+    // タップ → プレイヤーモーダル
+    item.addEventListener('click', e=>{ if(e.target.classList.contains('dl-btn'))return; openPlayer(url); });
+  }
+
+  const dl=document.createElement('button'); dl.className='dl-btn'; dl.textContent='↓';
+  dl.onclick=e=>{
     e.stopPropagation();
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+    const a=document.createElement('a');
+    a.href=blob?URL.createObjectURL(blob):url; a.download=fname; a.click();
   };
-
-  item.appendChild(badge); item.appendChild(thumb); item.appendChild(dl);
+  item.appendChild(dl);
   document.getElementById('galleryGrid').prepend(item);
 }
 
-// =====================================================
-// 動画プレイヤーモーダル（スロー・コマ送り）
-// =====================================================
-function openPlayer(url) {
-  playerVideo.src = url;
+// ═══════════════════════════════════════════
+// ★ 動画プレイヤーモーダル
+// ═══════════════════════════════════════════
+function openPlayer(url){
+  playerVideo.src=url;
   playerVideo.load();
   playerVideo.play();
-  setPlayerSpeed(1.0);
+  setSpeed(1);
   playerModal.classList.add('open');
 }
 
-function setPlayerSpeed(rate) {
-  playerVideo.playbackRate = rate;
-  playerSpeed.textContent = rate + 'x';
-  [btn025x, btn05x, btn1x, btn2x].forEach(b => b.classList.remove('active'));
-  if (rate === 0.25) btn025x.classList.add('active');
-  else if (rate === 0.5)  btn05x.classList.add('active');
-  else if (rate === 1.0)  btn1x.classList.add('active');
-  else if (rate === 2.0)  btn2x.classList.add('active');
+function setSpeed(rate){
+  playerVideo.playbackRate=rate;
+  document.getElementById('playerSpeedLabel').textContent=rate+'x';
+  document.querySelectorAll('.player-speed-row button[data-rate]').forEach(b=>{
+    b.classList.toggle('active', +b.dataset.rate===rate);
+  });
 }
 
-btn025x.onclick      = () => setPlayerSpeed(0.25);
-btn05x.onclick       = () => setPlayerSpeed(0.5);
-btn1x.onclick        = () => setPlayerSpeed(1.0);
-btn2x.onclick        = () => setPlayerSpeed(2.0);
+document.querySelectorAll('.player-speed-row button[data-rate]').forEach(b=>{
+  b.addEventListener('click',()=>setSpeed(+b.dataset.rate));
+});
 
-// コマ戻し（1フレーム ≒ 1/30秒）
-btnFramePrev.onclick = () => {
+btnFramePrev.onclick=()=>{
   playerVideo.pause();
-  playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1/30);
+  playerVideo.currentTime=Math.max(0,playerVideo.currentTime-1/30);
 };
-// コマ送り
-btnFrameNext.onclick = () => {
+btnFrameNext.onclick=()=>{
   playerVideo.pause();
-  playerVideo.currentTime = Math.min(playerVideo.duration||0, playerVideo.currentTime + 1/30);
+  playerVideo.currentTime=Math.min(playerVideo.duration||0,playerVideo.currentTime+1/30);
 };
-
-playerClose.onclick = () => {
+playerClose.onclick=()=>{
   playerVideo.pause(); playerVideo.src='';
   playerModal.classList.remove('open');
 };
-// 背景タップで閉じる
-playerModal.addEventListener('click', e => {
-  if (e.target === playerModal) playerClose.click();
-});
+playerModal.addEventListener('click',e=>{ if(e.target===playerModal)playerClose.click(); });
 </script>
 </body>
 </html>
