@@ -441,6 +441,31 @@ btnStart.onclick = async () => {
 };
 
 // ═══════════════════════════════════════════
+// ★ 動画フォーマット選択（MP4優先・デバイス自動判定）
+//   iOS Safari → MP4(H.264)
+//   Android Chrome → WebM(VP9/H264) にフォールバック
+// ═══════════════════════════════════════════
+function getBestMimeType() {
+  const candidates = [
+    'video/mp4;codecs=avc1.424028,mp4a.40.2', // iOS Safari / Chrome 130+
+    'video/mp4;codecs=h264',
+    'video/mp4',
+    'video/webm;codecs=h264',
+    'video/webm;codecs=vp9',
+    'video/webm',
+  ];
+  return candidates.find(t => {
+    try { return MediaRecorder.isTypeSupported(t); } catch(e) { return false; }
+  }) || '';
+}
+
+// 実際に使われるフォーマットをHUDに表示
+function showFormatHud(mime) {
+  const isMP4 = mime.toLowerCase().includes('mp4');
+  modelStatus.textContent = `Ready ✓  動画: ${isMP4 ? 'MP4 (H.264)' : 'WebM'} ※デバイス自動選択`;
+}
+
+// ═══════════════════════════════════════════
 // AI toggle
 // ═══════════════════════════════════════════
 btnAI.onclick = () => {
@@ -460,8 +485,8 @@ btnAI.onclick = () => {
 function startCircRecorder() {
   if (!canvas.captureStream) return;
   const s = canvas.captureStream(30);
-  const mime = ['video/webm;codecs=vp9','video/webm;codecs=h264','video/webm','video/mp4']
-    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const mime = getBestMimeType();
+  showFormatHud(mime);
   try { circRecorder = new MediaRecorder(s, mime ? { mimeType: mime } : {}); }
   catch(e) { circRecorder = new MediaRecorder(s); }
 
@@ -763,8 +788,8 @@ function buildClipVideo(triggerTs){
 
   const preSec  = +preSlider.value;
   const postSec = +postSlider.value;
-  const mime    = circRecorder?.mimeType || 'video/webm';
-  const ext     = mime.includes('mp4')?'mp4':'webm';
+  const mime    = getBestMimeType();
+  const ext     = mime.toLowerCase().includes('mp4') ? 'mp4' : 'webm';
 
   // 前N秒分のチャンクを抽出
   const cutoff = triggerTs - preSec*1000;
@@ -832,13 +857,12 @@ btnShot.onclick=()=>{
 // ═══════════════════════════════════════════
 btnRec.onclick=()=>{
   recordedChunks=[];
-  const mime=['video/mp4','video/webm;codecs=h264','video/webm;codecs=vp9','video/webm']
-    .find(t=>MediaRecorder.isTypeSupported(t))||'';
+  const mime = getBestMimeType();
   try{mediaRecorder=new MediaRecorder(canvas.captureStream(30),mime?{mimeType:mime}:{});}
   catch(e){mediaRecorder=new MediaRecorder(canvas.captureStream(30));}
   mediaRecorder.ondataavailable=e=>{if(e.data?.size>0)recordedChunks.push(e.data);};
   mediaRecorder.onstop=()=>{
-    const m=mediaRecorder.mimeType||'video/webm';
+    const m=mediaRecorder.mimeType||getBestMimeType()||'video/webm';
     const ext=m.includes('mp4')?'mp4':'webm';
     const blob=new Blob(recordedChunks,{type:m});
     const url=URL.createObjectURL(blob);
