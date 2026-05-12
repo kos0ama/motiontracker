@@ -9,6 +9,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
+  <!-- Tesseract.js OCR（ナンバープレート読み取り） -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -103,6 +105,29 @@
     .badge-clip { background:rgba(88,214,141,0.9); color:#000; }
     .badge-shot { background:rgba(93,173,226,0.85); color:#000; }
     .badge-rec  { background:rgba(142,68,173,0.85); color:#fff; }
+    .badge-plate{ background:rgba(231,76,60,0.92);  color:#fff; }
+
+    /* ===== Car Mode ===== */
+    .btn-car { border-color:#7a2c0a; color:#e8734a; }
+    .btn-car.on { background:#2d1200; color:#ff6b35; border-color:#e8734a; }
+
+    /* ナンバープレート検出HUD */
+    #plateHud {
+      bottom:55px; left:50%; transform:translateX(-50%);
+      display:none; white-space:nowrap;
+      background:rgba(231,76,60,0.92); color:#fff; font-weight:bold;
+      padding:5px 16px; border-radius:20px; font-size:12px; letter-spacing:0.08em;
+    }
+    #ocrStatus {
+      bottom:8px; right:10px; color:#555; font-size:9px; display:none;
+    }
+
+    /* ナンバープレート枠のアニメ */
+    @keyframes plateGlow {
+      0%,100%{ filter:drop-shadow(0 0 4px #e74c3c); }
+      50%    { filter:drop-shadow(0 0 12px #ff6b35); }
+    }
+    .plate-locked { animation: plateGlow 0.8s infinite; }
 
     /* ===== Video Player Modal ===== */
     #playerModal {
@@ -140,6 +165,8 @@
       <div class="hud" id="aiHud">🎬 AI CAMERAMAN</div>
       <div class="hud" id="chanceHud">📸 シャッターチャンス！</div>
       <div class="hud" id="bufStatus"></div>
+      <div class="hud" id="plateHud">🚗 ナンバー検出中...</div>
+      <div class="hud" id="ocrStatus">OCR: --</div>
       <div class="hud" id="modelStatus">Loading models...</div>
       <div id="shotFlash"></div>
     </div>
@@ -219,6 +246,33 @@
       <label class="lbl">軌跡：<span id="trailVal">30</span>
         <input type="range" id="trail" min="5" max="100" value="30">
       </label>
+    </div>
+
+    <!-- Car Mode -->
+    <div class="section">
+      <div class="section-title">🚗 Car Mode — ナンバープレート自動撮影</div>
+      <div class="btn-row" style="margin-bottom:6px;">
+        <button id="btnCar" class="btn-car" disabled>🚗 CAR MODE OFF</button>
+      </div>
+      <div style="font-size:9px; color:#444; line-height:1.7; margin-bottom:6px;">
+        車を検出→ナンバープレート領域を拡大追跡<br>
+        鮮明なフレームを自動撮影→OCRでナンバーを読み取り<br>
+        音声で読み上げ→ナンバーをファイル名にして保存
+      </div>
+      <label class="lbl">フォーカス感度（車の大きさ閾値）：<span id="carSizeVal">15</span>%
+        <input type="range" id="carSizeSlider" min="5" max="50" value="15">
+      </label>
+      <label class="lbl">撮影クールダウン：<span id="carCoolVal">5</span>秒
+        <input type="range" id="carCoolSlider" min="2" max="30" value="5">
+      </label>
+      <label class="lbl" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <input type="checkbox" id="chkCarVoice" checked> 音声読み上げ
+      </label>
+      <label class="lbl" style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="chkCarBeep" checked> 撮影音を鳴らす
+      </label>
+      <!-- OCR履歴 -->
+      <div id="plateLog" style="margin-top:8px; max-height:80px; overflow-y:auto; font-size:9px; color:#555; line-height:1.8;"></div>
     </div>
 
     <!-- Gallery -->
@@ -341,6 +395,32 @@ let clipInProgress = false;
 let fpsFrames = 0, fpsLast = performance.now();
 
 // ═══════════════════════════════════════════
+// Car Mode state
+// ═══════════════════════════════════════════
+let carMode         = false;
+let tesseractWorker = null;
+let ocrBusy         = false;
+let lastPlateTs     = 0;
+const plateHud      = document.getElementById('plateHud');
+const ocrStatus     = document.getElementById('ocrStatus');
+const plateLog      = document.getElementById('plateLog');
+const btnCar        = document.getElementById('btnCar');
+const chkCarVoice   = document.getElementById('chkCarVoice');
+const chkCarBeep    = document.getElementById('chkCarBeep');
+const carSizeSlider = document.getElementById('carSizeSlider');
+const carCoolSlider = document.getElementById('carCoolSlider');
+
+let trackedCar      = null;   // { bbox:[x,y,w,h], lockFrames, lastSharpness }
+const LOCK_FRAMES   = 8;      // N フレーム連続検出でロック撮影
+
+const synth = window.speechSynthesis;
+let audioCtx = null;
+function getAudioCtx(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+
+document.getElementById('carSizeSlider').addEventListener('input',()=>{ document.getElementById('carSizeVal').textContent=carSizeSlider.value; });
+document.getElementById('carCoolSlider').addEventListener('input',()=>{ document.getElementById('carCoolVal').textContent=carCoolSlider.value; });
+
+// ═══════════════════════════════════════════
 // UI helpers
 // ═══════════════════════════════════════════
 trailSlider.addEventListener('input',   () => { trailValEl.textContent = trailSlider.value; });
@@ -357,6 +437,37 @@ document.querySelectorAll('.mode-chip').forEach(chip => {
     chip.classList.toggle('on', subModes[m]);
   });
 });
+
+// ─── Car Mode toggle ───
+btnCar.onclick = async () => {
+  carMode = !carMode;
+  btnCar.textContent  = carMode ? '🚗 CAR MODE ON' : '🚗 CAR MODE OFF';
+  btnCar.classList.toggle('on', carMode);
+  plateHud.style.display  = carMode ? 'block' : 'none';
+  ocrStatus.style.display = carMode ? 'block' : 'none';
+
+  if (carMode) {
+    // Tesseract worker 初期化（初回のみ）
+    if (!tesseractWorker) {
+      ocrStatus.textContent = 'OCR: 初期化中...';
+      tesseractWorker = await Tesseract.createWorker('jpn+eng', 1, {
+        logger: m => { if(m.status==='recognizing text') ocrStatus.textContent=`OCR: ${Math.round(m.progress*100)}%`; }
+      });
+      // ナンバープレート向けの文字セット制限
+      await tesseractWorker.setParameters({
+        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン',
+      });
+      ocrStatus.textContent = 'OCR: Ready ✓';
+    }
+    trackedCar = null;
+    lastPlateTs = 0;
+    plateHud.textContent = '🚗 車を検出待機中...';
+  } else {
+    trackedCar = null;
+    plateHud.style.display  = 'none';
+    ocrStatus.style.display = 'none';
+  }
+};
 
 // ═══════════════════════════════════════════
 // Canvas size sync
@@ -428,7 +539,7 @@ btnStart.onclick = async () => {
     modelStatus.textContent = `Ready ✓ ${settings.width||'?'}×${settings.height||'?'}`;
 
     btnStart.disabled=true; btnStop.disabled=false;
-    btnShot.disabled=false; btnRec.disabled=false; btnAI.disabled=false;
+    btnShot.disabled=false; btnRec.disabled=false; btnAI.disabled=false; btnCar.disabled=false;
 
     isRunning=true;
     fpsLast=performance.now(); fpsFrames=0;
@@ -537,6 +648,9 @@ function drawLoop() {
     evaluateShutterChance();
   }
 
+  // Car Mode 処理（AI Cameraモードとは独立して動作）
+  if (carMode) updateCarMode(W, H, vw, vh);
+
   fpsFrames++;
   const n=performance.now();
   if (n-fpsLast>1000) {
@@ -545,6 +659,259 @@ function drawLoop() {
   }
 
   drawAnimId=requestAnimationFrame(drawLoop);
+}
+
+// ═══════════════════════════════════════════
+// CAR MODE — ナンバープレート自動撮影
+// ═══════════════════════════════════════════
+
+// 1フレームのcanvas領域のシャープネス（Laplacian分散）を計算
+function calcSharpness(imageData) {
+  const d = imageData.data;
+  const w = imageData.width, h = imageData.height;
+  let sum = 0, sum2 = 0, n = 0;
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      const i = (y*w+x)*4;
+      const gray = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+      const grayT = d[((y-1)*w+x)*4]*0.299 + d[((y-1)*w+x)*4+1]*0.587 + d[((y-1)*w+x)*4+2]*0.114;
+      const grayB = d[((y+1)*w+x)*4]*0.299 + d[((y+1)*w+x)*4+1]*0.587 + d[((y+1)*w+x)*4+2]*0.114;
+      const grayL = d[(y*w+x-1)*4]*0.299 + d[(y*w+x-1)*4+1]*0.587 + d[(y*w+x-1)*4+2]*0.114;
+      const grayR = d[(y*w+x+1)*4]*0.299 + d[(y*w+x+1)*4+1]*0.587 + d[(y*w+x+1)*4+2]*0.114;
+      const lap = Math.abs(grayT+grayB+grayL+grayR - 4*gray);
+      sum += lap; sum2 += lap*lap; n++;
+    }
+  }
+  const mean = sum/n;
+  return sum2/n - mean*mean; // 分散（大きいほどシャープ）
+}
+
+// メインのcar mode更新（drawLoopから毎フレーム呼ばれる）
+function updateCarMode(W, H, vw, vh) {
+  const cars = cocoDetections.filter(d => d.classKey==='car' || d.classKey==='truck' || d.classKey==='bus');
+  const minSize = +carSizeSlider.value / 100; // 画面に対する最小面積比
+
+  if (cars.length === 0) {
+    trackedCar = null;
+    plateHud.textContent = '🚗 車を検出待機中...';
+    return;
+  }
+
+  // 最も中央に近く・面積が大きい車を選択
+  const cx = W/2, cy = H/2;
+  const best = cars.reduce((b, c) => {
+    const area = c.bbox[2]*c.bbox[3]/(W*H);
+    if (area < minSize) return b;
+    const pcx = c.bbox[0]+c.bbox[2]/2, pcy = c.bbox[1]+c.bbox[3]/2;
+    const score = area - Math.hypot(pcx-cx,pcy-cy)/W*0.3;
+    return score > b.score ? {c, score} : b;
+  }, {c:null, score:-Infinity});
+
+  if (!best.c) {
+    trackedCar = null;
+    plateHud.textContent = '🚗 サイズ不足の車を検出中...';
+    return;
+  }
+
+  const [bx,by,bw,bh] = best.c.bbox;
+
+  // 追跡状態を更新
+  if (!trackedCar) {
+    trackedCar = { bbox:[bx,by,bw,bh], lockFrames:1, lastSharpness:0 };
+  } else {
+    // 移動平均で滑らかに追従
+    const prev = trackedCar.bbox;
+    trackedCar.bbox = [
+      prev[0]*0.7+bx*0.3, prev[1]*0.7+by*0.3,
+      prev[2]*0.7+bw*0.3, prev[3]*0.7+bh*0.3
+    ];
+    trackedCar.lockFrames = Math.min(trackedCar.lockFrames+1, LOCK_FRAMES+5);
+  }
+
+  const [tx,ty,tw,th] = trackedCar.bbox;
+
+  // ===== 描画：車の枠 =====
+  const locked = trackedCar.lockFrames >= LOCK_FRAMES;
+  ctx.strokeStyle = locked ? '#e74c3c' : '#e67e22';
+  ctx.lineWidth   = locked ? 2.5 : 1.5;
+  ctx.setLineDash(locked ? [] : [6,4]);
+  ctx.strokeRect(tx, ty, tw, th);
+  ctx.setLineDash([]);
+
+  // 四隅のLマーカー
+  const cs = 14;
+  ctx.lineWidth = 3; ctx.strokeStyle = locked ? '#e74c3c' : '#e67e22';
+  [[tx,ty],[tx+tw,ty],[tx,ty+th],[tx+tw,ty+th]].forEach(([ox,oy])=>{
+    const dx=ox===tx?1:-1, dy=oy===ty?1:-1;
+    ctx.beginPath(); ctx.moveTo(ox+dx*cs,oy); ctx.lineTo(ox,oy); ctx.lineTo(ox,oy+dy*cs); ctx.stroke();
+  });
+
+  // ラベル
+  ctx.font='bold 12px Courier New';
+  const lockTxt = locked ? `🔒 ${best.c.classKey.toUpperCase()} LOCKED` : `🔍 ${best.c.classKey.toUpperCase()} TRACKING...`;
+  const tw2=ctx.measureText(lockTxt).width+10;
+  ctx.fillStyle=locked?'#e74c3c':'#e67e22'; ctx.fillRect(tx,ty-20,tw2,20);
+  ctx.fillStyle='#fff'; ctx.fillText(lockTxt, tx+5, ty-5);
+
+  plateHud.textContent = locked ? '📷 ナンバー撮影準備完了' : `🔍 追跡中（${trackedCar.lockFrames}/${LOCK_FRAMES}フレーム）`;
+
+  // ===== ロックされたら撮影判定 =====
+  if (!locked) return;
+  const now = performance.now();
+  const coolMs = +carCoolSlider.value * 1000;
+  if (now - lastPlateTs < coolMs) return;
+  if (ocrBusy) return;
+
+  // シャープネス計算（ナンバープレート推定領域）
+  // 車のbboxの下1/3 × 幅80%をナンバープレート候補領域とする
+  const npX = Math.max(0, Math.round(tx + tw*0.1));
+  const npY = Math.max(0, Math.round(ty + th*0.55));
+  const npW = Math.min(canvas.width  - npX, Math.round(tw*0.8));
+  const npH = Math.min(canvas.height - npY, Math.round(th*0.35));
+
+  if (npW < 10 || npH < 5) return;
+
+  const plateImgData = ctx.getImageData(npX, npY, npW, npH);
+  const sharpness = calcSharpness(plateImgData);
+
+  // 前フレームよりシャープになった（またはフレームが十分溜まった）タイミングで撮影
+  if (sharpness >= trackedCar.lastSharpness || trackedCar.lockFrames >= LOCK_FRAMES+3) {
+    trackedCar.lastSharpness = sharpness;
+    if (sharpness > 50 || trackedCar.lockFrames >= LOCK_FRAMES+3) {
+      lastPlateTs = now;
+      captureAndReadPlate(tx, ty, tw, th);
+    }
+  } else {
+    trackedCar.lastSharpness = sharpness;
+  }
+}
+
+// ===== 高画質撮影 → OCR → 音声 → 保存 =====
+async function captureAndReadPlate(bx, by, bw, bh) {
+  if (ocrBusy || !vid.videoWidth) return;
+  ocrBusy = true;
+  ocrStatus.textContent = 'OCR: 撮影中...';
+
+  // ビープ音
+  if (chkCarBeep.checked) playBeep(880, 0.08);
+
+  // ─── 実解像度でキャプチャ ───
+  const vw=vid.videoWidth, vh=vid.videoHeight;
+  const scaleX = vw / canvas.width, scaleY = vh / canvas.height;
+
+  // ビューポート（オートフレーミング）考慮
+  const srcX=smoothVp.sx*vw, srcY=smoothVp.sy*vh;
+  const srcW=smoothVp.sw*vw, srcH=smoothVp.sh*vh;
+
+  const hiC=document.createElement('canvas');
+  hiC.width  = Math.round(srcW);
+  hiC.height = Math.round(srcH);
+  const hiCtx=hiC.getContext('2d');
+
+  hiCtx.save();
+  if (isFrontCam) { hiCtx.scale(-1,1); hiCtx.drawImage(vid,srcX,srcY,srcW,srcH,-hiC.width,0,hiC.width,hiC.height); }
+  else            { hiCtx.drawImage(vid,srcX,srcY,srcW,srcH,0,0,hiC.width,hiC.height); }
+  hiCtx.restore();
+
+  // 枠のオーバーレイをスケールして重ねる
+  const ovScaleX=hiC.width/canvas.width, ovScaleY=hiC.height/canvas.height;
+  hiCtx.save(); hiCtx.scale(ovScaleX,ovScaleY);
+  hiCtx.drawImage(canvas,0,0); hiCtx.restore();
+
+  // フラッシュ演出
+  shotFlash.style.opacity='0.9';
+  setTimeout(()=>{shotFlash.style.opacity='0';},150);
+
+  // ─── OCR: ナンバープレート候補領域を切り出して認識 ───
+  // canvas座標 → 実ピクセル座標に変換
+  const npX = Math.round((bx + bw*0.05) * ovScaleX);
+  const npY = Math.round((by + bh*0.50) * ovScaleY);
+  const npW = Math.round(bw*0.90 * ovScaleX);
+  const npH = Math.round(bh*0.42 * ovScaleY);
+
+  let plateText = 'UNKNOWN';
+  try {
+    if (tesseractWorker && npW>10 && npH>5) {
+      ocrStatus.textContent = 'OCR: 認識中...';
+
+      // ナンバープレート領域を切り出す
+      const plateC=document.createElement('canvas');
+      plateC.width=Math.max(1,npW); plateC.height=Math.max(1,npH);
+      const pCtx=plateC.getContext('2d');
+
+      // コントラスト強調（白黒反転なし、シャープ化）
+      pCtx.filter='contrast(1.8) brightness(1.1) saturate(0)';
+      pCtx.drawImage(hiC, npX, npY, npW, npH, 0, 0, plateC.width, plateC.height);
+      pCtx.filter='none';
+
+      const { data } = await tesseractWorker.recognize(plateC);
+      // ノイズ除去：英数字・ひらがな・カタカナのみ残す
+      const raw = data.text.replace(/[^0-9A-Za-zぁ-んァ-ン\u4e00-\u9fff]/g,'').trim();
+      if (raw.length >= 3) plateText = raw;
+      ocrStatus.textContent = `OCR: ${plateText}`;
+    }
+  } catch(e) {
+    console.warn('OCR error:', e);
+    ocrStatus.textContent = 'OCR: エラー';
+  }
+
+  // ─── ファイル名をナンバーにして保存 ───
+  const safeText = plateText.replace(/[\\/:*?"<>|]/g,'_');
+  const ts = new Date().toISOString().replace(/[:.]/g,'-');
+  const fname = `plate_${safeText}_${ts}.png`;
+
+  hiC.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    // ダウンロード
+    const a=document.createElement('a'); a.href=url; a.download=fname; a.click();
+    // ギャラリーに追加
+    addGalleryItem('image', url, blob, fname, 'badge-plate', null);
+    setTimeout(()=>URL.revokeObjectURL(url), 15000);
+  }, 'image/png');
+
+  // ─── OCR履歴に追加 ───
+  const logLine = document.createElement('div');
+  logLine.textContent = `${new Date().toLocaleTimeString()} → ${plateText}`;
+  logLine.style.color = '#e8734a';
+  plateLog.insertBefore(logLine, plateLog.firstChild);
+  if (plateLog.children.length > 20) plateLog.removeChild(plateLog.lastChild);
+
+  // HUD更新
+  plateHud.textContent = `🚗 ${plateText} を検出！`;
+
+  // ─── 音声読み上げ ───
+  if (chkCarVoice.checked && plateText !== 'UNKNOWN') speakPlateNumber(plateText);
+
+  ocrBusy = false;
+}
+
+// ナンバーを音声で読み上げる
+function speakPlateNumber(text) {
+  synth.cancel();
+  const readable = text
+    .replace(/([0-9]+)/g, m => m.split('').join(' ')) // 数字を1文字ずつ読む
+    .replace(/([A-Z]+)/g, m => m.split('').join(' ')); // アルファベットも1文字ずつ
+  const utt = new SpeechSynthesisUtterance('ナンバー ' + readable);
+  utt.lang  = 'ja-JP';
+  utt.rate  = 0.85;
+  utt.pitch = 1.0;
+  synth.speak(utt);
+}
+
+// ビープ音を鳴らす
+function playBeep(freq, dur) {
+  try {
+    const ac  = getAudioCtx();
+    const osc = ac.createOscillator();
+    const gain= ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+dur);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime+dur);
+  } catch(e) {}
 }
 
 // ═══════════════════════════════════════════
@@ -836,10 +1203,13 @@ btnStop.onclick=()=>{
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   cocoDetections=[];poseResults=null;faceResults=null;circChunks=[];
   aiMode=false;btnAI.classList.remove('on');btnAI.textContent='🎬 AI OFF';
+  carMode=false;btnCar.classList.remove('on');btnCar.textContent='🚗 CAR MODE OFF';
+  trackedCar=null;
   aiHud.style.display='none';chanceHud.style.display='none';bufStatus.style.display='none';
+  plateHud.style.display='none';ocrStatus.style.display='none';
   frameGuide.innerHTML='';
   btnStart.disabled=false;btnStop.disabled=true;
-  btnShot.disabled=true;btnRec.disabled=true;btnRecStop.disabled=true;btnAI.disabled=true;
+  btnShot.disabled=true;btnRec.disabled=true;btnRecStop.disabled=true;btnAI.disabled=true;btnCar.disabled=true;
   ctx.clearRect(0,0,canvas.width,canvas.height);
 };
 
@@ -895,7 +1265,7 @@ function addGalleryItem(type, url, blob, fname, badgeClass, _unused){
 
   const badge=document.createElement('div');
   badge.className='badge '+badgeClass;
-  badge.textContent=badgeClass==='badge-auto'?'AI':badgeClass==='badge-clip'?'CLIP':badgeClass==='badge-shot'?'SHOT':'REC';
+  badge.textContent=badgeClass==='badge-auto'?'AI':badgeClass==='badge-clip'?'CLIP':badgeClass==='badge-plate'?'🚗':badgeClass==='badge-shot'?'SHOT':'REC';
   item.appendChild(badge);
 
   if(type==='image'){
