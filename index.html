@@ -14,131 +14,199 @@
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; background: #050505; color: #ccc; font-family: 'Courier New', monospace; overflow-x: hidden; }
+    html, body {
+      height: 100%; background: #050505; color: #ccc;
+      font-family: 'Courier New', monospace; overflow: hidden;
+    }
 
-    #app { display: flex; flex-direction: column; min-height: 100dvh; }
+    /* ═══ APP: 縦3段レイアウト ═══
+       [VIDEO] flex:1（残り全部）
+       [ACTION BAR] fixed height
+       [PARAM BAR]  fixed height
+    */
+    #app {
+      display: flex; flex-direction: column;
+      height: 100dvh; width: 100%;
+    }
 
-    /* Video top */
-    #video-area { position: relative; width: 100%; background: #000; flex-shrink: 0; }
-    #canvas-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #0a0a0a; overflow: hidden; }
+    /* ── 動画エリア（上・残り全部） ── */
+    #video-area {
+      flex: 1; min-height: 0;
+      position: relative; background: #000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #canvas-wrap {
+      position: relative; background: #0a0a0a; overflow: hidden;
+      /* 動画エリアに収まる最大サイズ（16:9） */
+      width: 100%; height: 100%;
+    }
     #vid    { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; pointer-events:none; }
     #canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
 
-    /* Landscape */
-    @media (orientation: landscape) {
-      #app { flex-direction: row; height: 100dvh; overflow: hidden; }
-      #video-area { flex:1; display:flex; align-items:center; justify-content:center; min-width:0; }
-      #canvas-wrap { width:auto; height:100dvh; aspect-ratio:16/9; }
-      #ctrl-area { width:240px; flex:none; height:100dvh; overflow-y:auto; border-left:1px solid #141414; }
-    }
-
-    #ctrl-area { flex:1; overflow-y:auto; padding:10px 10px 24px; display:flex; flex-direction:column; gap:7px; }
-
-    .section { background:#0d0d0d; border:1px solid #1a1a1a; border-radius:8px; padding:8px 10px; }
-    .section-title { font-size:9px; color:#3a3a3a; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:6px; font-weight:bold; }
-
-    button {
-      font-family:'Courier New',monospace; font-size:11px; padding:6px 9px;
-      border:1px solid #2a2a2a; border-radius:6px; background:#151515; color:#999;
-      cursor:pointer; transition:all 0.12s; white-space:nowrap;
-    }
-    button:hover:not(:disabled) { background:#1f1f1f; color:#ddd; }
-    button:disabled { opacity:0.25; cursor:default; }
-    .btn-row { display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
-
-    .btn-start  { border-color:#1e5631; color:#4ead70; }
-    .btn-stop   { border-color:#7a2c2c; color:#d06b6b; }
-    .btn-shot   { border-color:#1a4a6b; color:#5dade2; }
-    .btn-rec    { border-color:#5b3a6b; color:#a37db3; }
-    .btn-rec.recording { background:#5b3a6b; color:#fff; animation:pulse 1.2s infinite; }
-    .btn-ai { border-color:#6b5a08; color:#d4b03f; }
-    .btn-ai.on { background:#2d2500; color:#f9e300; border-color:#d4b03f; }
-
-    .mode-chip {
-      display:inline-flex; align-items:center; gap:4px;
-      padding:3px 9px; border:1px solid #242424; border-radius:20px;
-      font-size:10px; color:#555; cursor:pointer; background:#111;
-      transition:all 0.12s; user-select:none;
-    }
-    .mode-chip.on { border-color:var(--cc,#d4b03f); color:var(--cc,#d4b03f); background:color-mix(in srgb,var(--cc,#d4b03f) 10%,#111); }
-    .mode-dot { width:5px; height:5px; border-radius:50%; background:var(--cc,#666); opacity:0.35; flex-shrink:0; }
-    .mode-chip.on .mode-dot { opacity:1; }
-
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
-
-    select { background:#151515; color:#aaa; border:1px solid #2a2a2a; border-radius:4px; font-size:10px; padding:4px 6px; font-family:'Courier New',monospace; }
-    input[type=range] { accent-color:#d4b03f; width:100%; }
-    label.lbl { font-size:10px; color:#444; display:block; margin-top:5px; }
-
     /* HUD */
     .hud { position:absolute; font-size:10px; letter-spacing:0.07em; pointer-events:none; }
-    #fpsHud     { top:8px; left:10px; color:#333; }
-    #recHud     { top:8px; right:10px; color:#9b59b6; display:none; }
-    #aiHud      { top:8px; left:50%; transform:translateX(-50%); color:#d4b03f; display:none; background:rgba(0,0,0,0.5); padding:2px 10px; border-radius:20px; }
+    #fpsHud     { top:6px; left:8px; color:#2a2a2a; }
+    #recHud     { top:6px; right:8px; color:#9b59b6; display:none; }
+    #aiHud      { top:6px; left:50%; transform:translateX(-50%); color:#d4b03f; display:none; background:rgba(0,0,0,0.55); padding:2px 10px; border-radius:20px; }
     #shotFlash  { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.05s; }
-    #modelStatus{ bottom:8px; left:10px; color:#2a2a2a; font-size:9px; }
-    #chanceHud  { bottom:30px; left:50%; transform:translateX(-50%); display:none; white-space:nowrap;
-                  background:rgba(212,176,63,0.9); color:#000; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:11px; }
-    #bufStatus  { top:30px; left:10px; color:#888; display:none; font-size:9px;
-                  background:rgba(0,0,0,0.6); padding:2px 8px; border-radius:10px; }
+    #modelStatus{ bottom:6px; left:8px; color:#222; font-size:8px; }
+    #chanceHud  { bottom:24px; left:50%; transform:translateX(-50%); display:none; white-space:nowrap;
+                  background:rgba(212,176,63,0.92); color:#000; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:11px; }
+    #bufStatus  { top:24px; left:8px; color:#888; display:none; font-size:9px; background:rgba(0,0,0,0.6); padding:2px 8px; border-radius:10px; }
+    #plateHud   { bottom:48px; left:50%; transform:translateX(-50%); display:none; white-space:nowrap;
+                  background:rgba(231,76,60,0.92); color:#fff; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:11px; }
+    #ocrStatus  { bottom:6px; right:8px; color:#444; font-size:8px; display:none; }
     #frameGuide { position:absolute; inset:0; pointer-events:none; }
 
-    /* Gallery */
-    #galleryGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:5px; }
-    .gallery-item { border:1px solid #1a1a1a; border-radius:5px; overflow:hidden; position:relative; background:#0a0a0a; }
-    .gallery-item img { width:100%; display:block; aspect-ratio:16/9; object-fit:cover; }
-    .gallery-thumb-video { width:100%; display:block; aspect-ratio:16/9; object-fit:cover; pointer-events:none; }
-    .gallery-item-video  { cursor:pointer; }
-    .gallery-item-video:hover { border-color:#555; }
-    .play-overlay {
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      pointer-events:none;
+    /* ── アクションバー（中段・撮影系ボタン） ── */
+    #action-bar {
+      flex-shrink: 0;
+      background: #0a0a0a;
+      border-top: 1px solid #1a1a1a;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
-    .play-icon {
-      width:32px; height:32px; border-radius:50%;
-      background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center;
-      font-size:14px; color:#fff;
-    }
-    .dl-btn { position:absolute; bottom:3px; right:3px; font-size:9px; padding:2px 5px; border-radius:3px; background:rgba(0,0,0,0.85); border:1px solid #444; color:#ccc; cursor:pointer; z-index:5; }
-    .gallery-item .badge { position:absolute; top:3px; left:3px; font-size:8px; padding:1px 5px; border-radius:10px; z-index:5; }
-    .badge-auto { background:rgba(212,176,63,0.9); color:#000; }
-    .badge-clip { background:rgba(88,214,141,0.9); color:#000; }
-    .badge-shot { background:rgba(93,173,226,0.85); color:#000; }
-    .badge-rec  { background:rgba(142,68,173,0.85); color:#fff; }
-    .badge-plate{ background:rgba(231,76,60,0.92);  color:#fff; }
+    #action-bar::-webkit-scrollbar { display: none; }
 
-    /* ===== Car Mode ===== */
+    /* ── パラメータバー（下段・設定ボタン） ── */
+    #param-bar {
+      flex-shrink: 0;
+      background: #080808;
+      border-top: 1px solid #141414;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #param-bar::-webkit-scrollbar { display: none; }
+
+    /* ── ボタン共通 ── */
+    button {
+      font-family: 'Courier New', monospace; font-size: 11px;
+      padding: 7px 11px; border: 1px solid #2a2a2a; border-radius: 8px;
+      background: #131313; color: #888; cursor: pointer;
+      transition: all 0.12s; white-space: nowrap; flex-shrink: 0;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    button:hover:not(:disabled) { background: #1e1e1e; color: #ddd; }
+    button:disabled { opacity: 0.22; cursor: default; }
+
+    /* アクションバー内の大きめボタン */
+    #action-bar button { font-size: 13px; padding: 9px 14px; border-radius: 10px; }
+
+    .btn-start  { border-color:#1e5631; color:#4ead70; }
+    .btn-start:hover:not(:disabled) { background:#0a1f12; }
+    .btn-stop   { border-color:#7a2c2c; color:#d06b6b; }
+    .btn-stop:hover:not(:disabled)  { background:#1f0a0a; }
+    .btn-shot   { border-color:#1a4a6b; color:#5dade2; font-size:16px !important; }
+    .btn-shot:hover:not(:disabled)  { background:#0a1625; }
+    .btn-rec    { border-color:#5b3a6b; color:#a37db3; }
+    .btn-rec:hover:not(:disabled)   { background:#1a0f25; }
+    .btn-rec.recording { background:#5b3a6b; color:#fff; animation:pulse 1.2s infinite; }
+    .btn-ai  { border-color:#6b5a08; color:#d4b03f; }
+    .btn-ai.on  { background:#2d2500; color:#f9e300; border-color:#d4b03f; }
     .btn-car { border-color:#7a2c0a; color:#e8734a; }
     .btn-car.on { background:#2d1200; color:#ff6b35; border-color:#e8734a; }
 
-    /* ナンバープレート検出HUD */
-    #plateHud {
-      bottom:55px; left:50%; transform:translateX(-50%);
-      display:none; white-space:nowrap;
-      background:rgba(231,76,60,0.92); color:#fff; font-weight:bold;
-      padding:5px 16px; border-radius:20px; font-size:12px; letter-spacing:0.08em;
+    /* パラメータバー内のアイコン風設定ボタン */
+    .btn-param {
+      font-size: 10px !important; padding: 5px 9px !important;
+      border-color: #252525; color: #666;
+      flex-direction: column; gap: 2px;
     }
-    #ocrStatus {
-      bottom:8px; right:10px; color:#555; font-size:9px; display:none;
-    }
+    .btn-param .p-icon { font-size: 14px; line-height: 1; }
+    .btn-param .p-label { font-size: 8px; letter-spacing: 0.05em; }
+    .btn-param:hover:not(:disabled) { background: #1a1a1a; color: #aaa; border-color: #444; }
 
-    /* ナンバープレート枠のアニメ */
-    @keyframes plateGlow {
-      0%,100%{ filter:drop-shadow(0 0 4px #e74c3c); }
-      50%    { filter:drop-shadow(0 0 12px #ff6b35); }
+    /* アクションバーの区切り */
+    .bar-sep { width: 1px; height: 28px; background: #1e1e1e; flex-shrink: 0; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+    /* ═══ ポップアップパネル（共通） ═══ */
+    .popup-overlay {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.6);
+      align-items: flex-end; justify-content: center;
     }
+    .popup-overlay.open { display: flex; }
+    .popup-sheet {
+      background: #0f0f0f; border: 1px solid #222;
+      border-radius: 16px 16px 0 0;
+      padding: 16px 16px 28px;
+      width: 100%; max-width: 600px;
+      max-height: 75dvh; overflow-y: auto;
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .popup-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .popup-title { font-size: 11px; color: #666; letter-spacing: 0.12em; text-transform: uppercase; }
+    .popup-close {
+      font-size: 16px; color: #555; background: none; border: none;
+      cursor: pointer; padding: 2px 6px;
+    }
+    .popup-close:hover { color: #fff; }
+
+    /* ポップアップ内の部品 */
+    .pp-section { margin-bottom: 14px; }
+    .pp-section-title { font-size: 9px; color: #444; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+    .pp-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+    label.lbl { font-size: 10px; color: #444; display: block; margin-top: 5px; }
+    select {
+      background: #151515; color: #aaa; border: 1px solid #2a2a2a;
+      border-radius: 4px; font-size: 10px; padding: 4px 6px;
+      font-family: 'Courier New', monospace;
+    }
+    input[type=range] { accent-color: #d4b03f; width: 100%; }
+
+    /* mode-chip（ポップアップ内） */
+    .mode-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border: 1px solid #242424; border-radius: 20px;
+      font-size: 10px; color: #555; cursor: pointer; background: #111;
+      transition: all 0.12s; user-select: none; flex-shrink: 0;
+    }
+    .mode-chip.on { border-color: var(--cc,#d4b03f); color: var(--cc,#d4b03f); background: color-mix(in srgb,var(--cc,#d4b03f) 10%,#111); }
+    .mode-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cc,#666); opacity: 0.35; flex-shrink: 0; }
+    .mode-chip.on .mode-dot { opacity: 1; }
+
+    /* ═══ ギャラリーポップアップ ═══ */
+    #galleryPopup .popup-sheet { border-radius: 16px 16px 0 0; }
+    #galleryGrid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 5px;
+    }
+    .gallery-item { border: 1px solid #1a1a1a; border-radius: 5px; overflow: hidden; position: relative; background: #0a0a0a; }
+    .gallery-item img { width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover; }
+    .gallery-thumb-video { width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover; pointer-events: none; }
+    .gallery-item-video { cursor: pointer; }
+    .gallery-item-video:hover { border-color: #555; }
+    .play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    .play-icon { width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; }
+    .dl-btn { position: absolute; bottom: 3px; right: 3px; font-size: 8px; padding: 2px 4px; border-radius: 3px; background: rgba(0,0,0,0.85); border: 1px solid #444; color: #ccc; cursor: pointer; z-index: 5; }
+    .gallery-item .badge { position: absolute; top: 3px; left: 3px; font-size: 7px; padding: 1px 4px; border-radius: 8px; z-index: 5; }
+    .badge-auto  { background: rgba(212,176,63,0.9);  color: #000; }
+    .badge-clip  { background: rgba(88,214,141,0.9);  color: #000; }
+    .badge-shot  { background: rgba(93,173,226,0.85); color: #000; }
+    .badge-rec   { background: rgba(142,68,173,0.85); color: #fff; }
+    .badge-plate { background: rgba(231,76,60,0.92);  color: #fff; }
+
+    /* ナンバープレート枠 */
+    @keyframes plateGlow { 0%,100%{filter:drop-shadow(0 0 4px #e74c3c)} 50%{filter:drop-shadow(0 0 12px #ff6b35)} }
     .plate-locked { animation: plateGlow 0.8s infinite; }
 
-    /* ===== Video Player Modal ===== */
-    #playerModal {
-      display:none; position:fixed; inset:0; z-index:2000;
-      background:rgba(0,0,0,0.94); align-items:center; justify-content:center; padding:16px;
-    }
+    /* ═══ VIDEO PLAYER MODAL ═══ */
+    #playerModal { display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.94); align-items:center; justify-content:center; padding:16px; }
     #playerModal.open { display:flex; }
-    #playerBox {
-      background:#111; border:1px solid #2a2a2a; border-radius:12px; padding:16px;
-      width:100%; max-width:720px; max-height:95dvh; overflow-y:auto;
-    }
+    #playerBox { background:#111; border:1px solid #2a2a2a; border-radius:12px; padding:16px; width:100%; max-width:720px; max-height:95dvh; overflow-y:auto; }
     #playerBox h3 { font-size:10px; color:#555; letter-spacing:0.12em; margin-bottom:10px; text-transform:uppercase; }
     #playerVideo { width:100%; border-radius:6px; background:#000; display:block; margin-bottom:10px; }
     .player-speed-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
@@ -154,7 +222,7 @@
 <body>
 <div id="app">
 
-  <!-- VIDEO -->
+  <!-- ① 動画エリア（上・最大） -->
   <div id="video-area">
     <div id="canvas-wrap">
       <video id="vid" autoplay muted playsinline></video>
@@ -172,40 +240,84 @@
     </div>
   </div>
 
-  <!-- CONTROLS -->
-  <div id="ctrl-area">
+  <!-- ② アクションバー（中段・撮影系） -->
+  <div id="action-bar">
+    <!-- カメラ START/STOP -->
+    <button id="btnStart" class="btn-start">▶ START</button>
+    <button id="btnStop"  class="btn-stop" disabled>■ STOP</button>
+    <div class="bar-sep"></div>
+    <!-- 撮影 -->
+    <button id="btnShot"    class="btn-shot" disabled title="スクリーンショット">📷</button>
+    <button id="btnRec"     class="btn-rec"  disabled>⏺ REC</button>
+    <button id="btnRecStop" class="btn-rec"  disabled>⏹</button>
+    <div class="bar-sep"></div>
+    <!-- AI / CAR MODE -->
+    <button id="btnAI"  class="btn-ai"  disabled>🎬 AI</button>
+    <button id="btnCar" class="btn-car" disabled>🚗 CAR</button>
+    <div class="bar-sep"></div>
+    <!-- ギャラリー -->
+    <button id="btnGallery" class="btn-param" style="font-size:13px!important; padding:7px 11px!important; flex-direction:row; gap:4px;">
+      🖼 <span style="font-size:10px;" id="galleryBadge">0</span>
+    </button>
+  </div>
 
-    <!-- Camera -->
-    <div class="section">
-      <div class="section-title">Camera</div>
-      <select id="camSelect" style="width:100%;margin-bottom:6px;"><option>Loading...</option></select>
-      <div class="btn-row">
-        <button id="btnStart" class="btn-start">▶ START</button>
-        <button id="btnStop"  class="btn-stop" disabled>■ STOP</button>
-      </div>
-      <label class="lbl">画質
-        <select id="qualitySelect" style="width:100%;margin-top:4px;">
-          <option value="480">480p (SD)</option>
-          <option value="720" selected>720p (HD)</option>
-          <option value="1080">1080p (FHD)</option>
-          <option value="2160">2160p (4K — デバイス依存)</option>
-        </select>
-      </label>
+  <!-- ③ パラメータバー（下段・設定系） -->
+  <div id="param-bar">
+    <button class="btn-param" id="btnPrmCamera"><span class="p-icon">📷</span><span class="p-label">カメラ</span></button>
+    <button class="btn-param" id="btnPrmAI"><span class="p-icon">🎬</span><span class="p-label">AI設定</span></button>
+    <button class="btn-param" id="btnPrmClip"><span class="p-icon">🎞</span><span class="p-label">クリップ</span></button>
+    <button class="btn-param" id="btnPrmCar"><span class="p-icon">🚗</span><span class="p-label">CAR設定</span></button>
+    <button class="btn-param" id="btnPrmOther"><span class="p-icon">⚙️</span><span class="p-label">その他</span></button>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ═══ ポップアップ：カメラ設定 ═══ -->
+<div class="popup-overlay" id="popCamera">
+  <div class="popup-sheet">
+    <div class="popup-header">
+      <span class="popup-title">📷 カメラ設定</span>
+      <button class="popup-close" data-close="popCamera">✕</button>
     </div>
+    <div class="pp-section">
+      <div class="pp-section-title">カメラ選択</div>
+      <select id="camSelect" style="width:100%;margin-bottom:8px;"><option>Loading...</option></select>
+    </div>
+    <div class="pp-section">
+      <div class="pp-section-title">画質</div>
+      <select id="qualitySelect" style="width:100%;">
+        <option value="480">480p (SD)</option>
+        <option value="720" selected>720p (HD)</option>
+        <option value="1080">1080p (FHD)</option>
+        <option value="2160">2160p (4K — デバイス依存)</option>
+      </select>
+      <p style="font-size:9px;color:#444;margin-top:4px;">※ 変更後は再STARTが必要</p>
+    </div>
+    <div class="pp-section">
+      <div class="pp-section-title">軌跡の長さ：<span id="trailVal">30</span></div>
+      <input type="range" id="trail" min="5" max="100" value="30">
+    </div>
+  </div>
+</div>
 
-    <!-- AI Cameraman -->
-    <div class="section">
-      <div class="section-title">AI Cameraman</div>
-      <div class="btn-row" style="margin-bottom:6px;">
-        <button id="btnAI" class="btn-ai" disabled>🎬 AI OFF</button>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+<!-- ═══ ポップアップ：AI設定 ═══ -->
+<div class="popup-overlay" id="popAI">
+  <div class="popup-sheet">
+    <div class="popup-header">
+      <span class="popup-title">🎬 AI Cameraman 設定</span>
+      <button class="popup-close" data-close="popAI">✕</button>
+    </div>
+    <div class="pp-section">
+      <div class="pp-section-title">検知モード</div>
+      <div class="pp-row">
         <div class="mode-chip on" data-mode="autoframe" style="--cc:#d4b03f;"><span class="mode-dot"></span>フレーム</div>
         <div class="mode-chip on" data-mode="pose"      style="--cc:#4ead70;"><span class="mode-dot"></span>ポーズ</div>
         <div class="mode-chip on" data-mode="smile"     style="--cc:#a37db3;"><span class="mode-dot"></span>笑顔</div>
         <div class="mode-chip on" data-mode="still"     style="--cc:#5dade2;"><span class="mode-dot"></span>静止</div>
       </div>
-      <label class="lbl">余白：<span id="paddingVal">30</span>%
+    </div>
+    <div class="pp-section">
+      <label class="lbl">フレーム余白：<span id="paddingVal">30</span>%
         <input type="range" id="paddingSlider" min="10" max="60" value="30">
       </label>
       <label class="lbl">平滑化：<span id="smoothVal">0.08</span>
@@ -215,76 +327,91 @@
         <input type="range" id="sensSlider" min="60" max="98" value="85">
       </label>
     </div>
+  </div>
+</div>
 
-    <!-- Auto Clip -->
-    <div class="section">
-      <div class="section-title">Auto Clip (静止検知時)</div>
+<!-- ═══ ポップアップ：クリップ設定 ═══ -->
+<div class="popup-overlay" id="popClip">
+  <div class="popup-sheet">
+    <div class="popup-header">
+      <span class="popup-title">🎞 Auto Clip 設定</span>
+      <button class="popup-close" data-close="popClip">✕</button>
+    </div>
+    <div class="pp-section">
       <label class="lbl">前：<span id="preVal">10</span>秒
         <input type="range" id="preSlider" min="3" max="30" value="10">
       </label>
       <label class="lbl">後：<span id="postVal">3</span>秒
         <input type="range" id="postSlider" min="1" max="15" value="3">
       </label>
-      <label class="lbl" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
-        <input type="checkbox" id="chkSaveStill" checked> 静止写真も保存
+      <label class="lbl" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <input type="checkbox" id="chkSaveStill" checked> 静止写真も同時保存
       </label>
     </div>
+  </div>
+</div>
 
-    <!-- Record / Shot -->
-    <div class="section">
-      <div class="section-title">Record / Shot</div>
-      <div class="btn-row">
-        <button id="btnShot"    class="btn-shot" disabled>📷 SHOT</button>
-        <button id="btnRec"     class="btn-rec"  disabled>⏺ REC</button>
-        <button id="btnRecStop" class="btn-rec"  disabled>⏹ STOP</button>
-      </div>
+<!-- ═══ ポップアップ：Car設定 ═══ -->
+<div class="popup-overlay" id="popCar">
+  <div class="popup-sheet">
+    <div class="popup-header">
+      <span class="popup-title">🚗 Car Mode 設定</span>
+      <button class="popup-close" data-close="popCar">✕</button>
     </div>
-
-    <!-- Settings -->
-    <div class="section">
-      <div class="section-title">Settings</div>
-      <label class="lbl">軌跡：<span id="trailVal">30</span>
-        <input type="range" id="trail" min="5" max="100" value="30">
-      </label>
-    </div>
-
-    <!-- Car Mode -->
-    <div class="section">
-      <div class="section-title">🚗 Car Mode — ナンバープレート自動撮影</div>
-      <div class="btn-row" style="margin-bottom:6px;">
-        <button id="btnCar" class="btn-car" disabled>🚗 CAR MODE OFF</button>
-      </div>
-      <div style="font-size:9px; color:#444; line-height:1.7; margin-bottom:6px;">
-        車を検出→ナンバープレート領域を拡大追跡<br>
-        鮮明なフレームを自動撮影→OCRでナンバーを読み取り<br>
-        音声で読み上げ→ナンバーをファイル名にして保存
-      </div>
-      <label class="lbl">フォーカス感度（車の大きさ閾値）：<span id="carSizeVal">15</span>%
+    <div class="pp-section">
+      <p style="font-size:9px;color:#555;line-height:1.7;margin-bottom:10px;">
+        車を検出 → ナンバープレートを自動撮影 → OCRで読み取り → 音声読み上げ → ファイル名をナンバーで保存
+      </p>
+      <label class="lbl">車の最小サイズ：<span id="carSizeVal">15</span>%
         <input type="range" id="carSizeSlider" min="5" max="50" value="15">
       </label>
       <label class="lbl">撮影クールダウン：<span id="carCoolVal">5</span>秒
         <input type="range" id="carCoolSlider" min="2" max="30" value="5">
       </label>
-      <label class="lbl" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+      <label class="lbl" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
         <input type="checkbox" id="chkCarVoice" checked> 音声読み上げ
       </label>
-      <label class="lbl" style="display:flex;align-items:center;gap:6px;">
-        <input type="checkbox" id="chkCarBeep" checked> 撮影音を鳴らす
+      <label class="lbl" style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="chkCarBeep" checked> 撮影ビープ音
       </label>
-      <!-- OCR履歴 -->
-      <div id="plateLog" style="margin-top:8px; max-height:80px; overflow-y:auto; font-size:9px; color:#555; line-height:1.8;"></div>
     </div>
-
-    <!-- Gallery -->
-    <div class="section">
-      <div class="section-title">Gallery <span id="galleryCount" style="color:#333;"></span></div>
-      <div id="galleryGrid"></div>
+    <div class="pp-section">
+      <div class="pp-section-title">OCR履歴</div>
+      <div id="plateLog" style="max-height:80px;overflow-y:auto;font-size:9px;color:#555;line-height:1.8;"></div>
     </div>
-
   </div>
 </div>
 
-<!-- ===== VIDEO PLAYER MODAL ===== -->
+<!-- ═══ ポップアップ：その他設定 ═══ -->
+<div class="popup-overlay" id="popOther">
+  <div class="popup-sheet">
+    <div class="popup-header">
+      <span class="popup-title">⚙️ その他</span>
+      <button class="popup-close" data-close="popOther">✕</button>
+    </div>
+    <div class="pp-section">
+      <div class="pp-section-title">動画フォーマット（自動選択）</div>
+      <p style="font-size:9px;color:#555;line-height:1.7;">
+        iOS Safari → MP4 (H.264)<br>
+        Android Chrome → WebM（MP4非対応）<br>
+        カメラ起動後にモデルステータスに表示されます
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ポップアップ：ギャラリー ═══ -->
+<div class="popup-overlay" id="galleryPopup">
+  <div class="popup-sheet">
+    <div class="popup-header">
+      <span class="popup-title">🖼 Gallery <span id="galleryCount" style="color:#333;"></span></span>
+      <button class="popup-close" data-close="galleryPopup">✕</button>
+    </div>
+    <div id="galleryGrid"></div>
+  </div>
+</div>
+
+<!-- ═══ VIDEO PLAYER MODAL ═══ -->
 <div id="playerModal">
   <div id="playerBox">
     <h3>▶ Video Player</h3>
@@ -411,7 +538,7 @@ const carSizeSlider = document.getElementById('carSizeSlider');
 const carCoolSlider = document.getElementById('carCoolSlider');
 
 let trackedCar      = null;   // { bbox:[x,y,w,h], lockFrames, lastSharpness }
-const LOCK_FRAMES   = 8;      // N フレーム連続検出でロック撮影
+const LOCK_FRAMES   = 2;      // 2フレーム連続検出で即ロック（移動中の車に対応）
 
 const synth = window.speechSynthesis;
 let audioCtx = null;
@@ -420,6 +547,28 @@ function getAudioCtx(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.w
 document.getElementById('carSizeSlider').addEventListener('input',()=>{ document.getElementById('carSizeVal').textContent=carSizeSlider.value; });
 document.getElementById('carCoolSlider').addEventListener('input',()=>{ document.getElementById('carCoolVal').textContent=carCoolSlider.value; });
 
+// ─── ポップアップ制御 ───
+function openPopup(id)  { document.getElementById(id).classList.add('open'); }
+function closePopup(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.popup-close').forEach(btn => {
+  btn.addEventListener('click', () => closePopup(btn.dataset.close));
+});
+document.querySelectorAll('.popup-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.classList.remove('open'); });
+});
+
+document.getElementById('btnPrmCamera').onclick = () => openPopup('popCamera');
+document.getElementById('btnPrmAI').onclick     = () => openPopup('popAI');
+document.getElementById('btnPrmClip').onclick   = () => openPopup('popClip');
+document.getElementById('btnPrmCar').onclick    = () => openPopup('popCar');
+document.getElementById('btnPrmOther').onclick  = () => openPopup('popOther');
+document.getElementById('btnGallery').onclick   = () => openPopup('galleryPopup');
+
+// ─── ギャラリーバッジ ───
+const galleryBadge = document.getElementById('galleryBadge');
+
+// ─── UI helpers ───
 // ═══════════════════════════════════════════
 // UI helpers
 // ═══════════════════════════════════════════
@@ -715,17 +864,13 @@ function updateCarMode(W, H, vw, vh) {
 
   const [bx,by,bw,bh] = best.c.bbox;
 
-  // 追跡状態を更新
+  // 追跡状態を更新（移動中の車に追従するため bbox を即時反映）
   if (!trackedCar) {
     trackedCar = { bbox:[bx,by,bw,bh], lockFrames:1, lastSharpness:0 };
   } else {
-    // 移動平均で滑らかに追従
-    const prev = trackedCar.bbox;
-    trackedCar.bbox = [
-      prev[0]*0.7+bx*0.3, prev[1]*0.7+by*0.3,
-      prev[2]*0.7+bw*0.3, prev[3]*0.7+bh*0.3
-    ];
-    trackedCar.lockFrames = Math.min(trackedCar.lockFrames+1, LOCK_FRAMES+5);
+    // 移動が速い車でも遅れないよう即時更新（平滑化なし）
+    trackedCar.bbox = [bx, by, bw, bh];
+    trackedCar.lockFrames = Math.min(trackedCar.lockFrames+1, LOCK_FRAMES+2);
   }
 
   const [tx,ty,tw,th] = trackedCar.bbox;
@@ -753,38 +898,31 @@ function updateCarMode(W, H, vw, vh) {
   ctx.fillStyle=locked?'#e74c3c':'#e67e22'; ctx.fillRect(tx,ty-20,tw2,20);
   ctx.fillStyle='#fff'; ctx.fillText(lockTxt, tx+5, ty-5);
 
-  plateHud.textContent = locked ? '📷 ナンバー撮影準備完了' : `🔍 追跡中（${trackedCar.lockFrames}/${LOCK_FRAMES}フレーム）`;
+  plateHud.textContent = locked ? '📷 撮影中...' : `🔍 追跡中（${trackedCar.lockFrames}/${LOCK_FRAMES}）`;
 
-  // ===== ロックされたら撮影判定 =====
+  // ===== ロックされたらシャープネスに関係なく即撮影 =====
   if (!locked) return;
   const now = performance.now();
   const coolMs = +carCoolSlider.value * 1000;
   if (now - lastPlateTs < coolMs) return;
   if (ocrBusy) return;
 
-  // シャープネス計算（ナンバープレート推定領域）
-  // 車のbboxの下1/3 × 幅80%をナンバープレート候補領域とする
+  // シャープネス計算（参考値として保持・撮影判定には使わない）
   const npX = Math.max(0, Math.round(tx + tw*0.1));
-  const npY = Math.max(0, Math.round(ty + th*0.55));
+  const npY = Math.max(0, Math.round(ty + th*0.50));
   const npW = Math.min(canvas.width  - npX, Math.round(tw*0.8));
-  const npH = Math.min(canvas.height - npY, Math.round(th*0.35));
+  const npH = Math.min(canvas.height - npY, Math.round(th*0.40));
 
   if (npW < 10 || npH < 5) return;
 
   const plateImgData = ctx.getImageData(npX, npY, npW, npH);
   const sharpness = calcSharpness(plateImgData);
+  trackedCar.lastSharpness = sharpness;
 
-  // 前フレームよりシャープになった（またはフレームが十分溜まった）タイミングで撮影
-  if (sharpness >= trackedCar.lastSharpness || trackedCar.lockFrames >= LOCK_FRAMES+3) {
-    trackedCar.lastSharpness = sharpness;
-    if (sharpness > 50 || trackedCar.lockFrames >= LOCK_FRAMES+3) {
-      lastPlateTs = now;
-      captureAndReadPlate(tx, ty, tw, th);
-    }
-  } else {
-    trackedCar.lastSharpness = sharpness;
-  }
-}
+  // ★ 移動中でも即撮影（シャープネス閾値を撤廃）
+  lastPlateTs = now;
+  captureAndReadPlate(tx, ty, tw, th);
+} // end updateCarMode
 
 // ===== 高画質撮影 → OCR → 音声 → 保存 =====
 async function captureAndReadPlate(bx, by, bw, bh) {
@@ -1259,6 +1397,7 @@ let galleryCount=0;
 function addGalleryItem(type, url, blob, fname, badgeClass, _unused){
   galleryCount++;
   document.getElementById('galleryCount').textContent=`(${galleryCount})`;
+  galleryBadge.textContent = galleryCount;
 
   const item=document.createElement('div');
   item.className='gallery-item';
