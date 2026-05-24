@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Ultimate Route Map Video Exporter</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <style>
+        body { 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            font-family: 'Helvetica Neue', Arial, sans-serif; 
+            background: #f4f4f9; 
+        }
+        #controls { 
+            padding: 15px; 
+            background: white; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            z-index: 1000; 
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
+            flex-wrap: wrap; 
+        }
+        .control-group { 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            background: #eee; 
+            padding: 6px 12px; 
+            border-radius: 5px; 
+        }
+        #map-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 70px);
+        }
+        #map { 
+            width: 100%;
+            height: 100%;
+        }
+        .btn { 
+            padding: 8px 15px; 
+            background: #005088; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold; 
+        }
+        .btn:hover { background: #003d66; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-export { background: #28a745; }
+        .btn-export:hover { background: #218838; }
+        .btn-cancel { background: #dc3545; }
+        .btn-cancel:hover { background: #bd2130; }
+        
+        .timeline-container {
+            flex-grow: 1;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        #timeline-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        #timeline { width: 100%; margin: 0; }
+        
+        #range-highlight {
+            position: absolute;
+            height: 6px;
+            background: rgba(40, 167, 69, 0.4);
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            border-radius: 3px;
+            display: none;
+        }
+        .range-btns {
+            display: flex;
+            gap: 5px;
+        }
+        .range-btns .btn {
+            padding: 3px 8px;
+            font-size: 11px;
+            background: #6c757d;
+        }
+        
+        #time-display { font-family: monospace; font-weight: bold; min-width: 70px; }
+        select, input[type="color"], input[type="checkbox"] { 
+            padding: 5px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; 
+        }
+        .checkbox-label { font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+        
+        #progress-panel {
+            display: none;
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 2000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="controls">
+    <input type="file" id="kml-file" accept=".kml" />
+    
+    <button id="play-btn" class="btn" disabled>再生</button>
+    
+    <div class="timeline-container">
+        <div id="timeline-wrapper">
+            <div id="range-highlight"></div>
+            <input type="range" id="timeline" min="0" value="0" disabled />
+        </div>
+        <div class="range-btns">
+            <button id="set-start-btn" class="btn" disabled>開始地点</button>
+            <button id="set-end-btn" class="btn" disabled>終了地点</button>
+            <span id="range-text" style="font-size: 11px; color: #555; align-self: center; margin-left: 5px;">範囲: 全区間</span>
+        </div>
+    </div>
+    
+    <span id="time-display">--:--:--</span>
+
+    <div class="control-group">
+        <label class="checkbox-label">
+            <input type="checkbox" id="track-marker" checked /> 追随
+        </label>
+    </div>
+
+    <div class="control-group">
+        <label>再生速度:</label>
+        <select id="speed-select">
+            <option value="0.1">0.1x</option>
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1.0x</option>
+            <option value="2">2.0x</option>
+            <option value="5">5.0x</option>
+            <option value="10">10x</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <select id="icon-select">
+            <option value="fa-car">車</option>
+            <option value="fa-person-walking">人</option>
+            <option value="fa-train">電車</option>
+            <option value="fa-bicycle">自転車</option>
+        </select>
+        <input type="color" id="route-color" value="#ff0000">
+    </div>
+
+    <div class="control-group">
+        <label>録画画質:</label>
+        <select id="quality-select">
+            <option value="12000000">最高画質 (12Mbps)</option>
+            <option value="6000000" selected>高画質 (6Mbps)</option>
+            <option value="3000000">標準画質 (3Mbps)</option>
+        </select>
+    </div>
+
+    <div class="control-group" style="background: #e3f2fd;">
+        <i class="fa-solid fa-video" style="color: #005088;"></i>
+        <button id="export-btn" class="btn btn-export" disabled>地図だけをクリアに録画</button>
+    </div>
+</div>
+
+<div id="map-container">
+    <div id="map"></div>
+    
+    <div id="progress-panel">
+        <div id="status-text" style="font-weight: bold; margin-bottom: 5px;">🔴 準備中...</div>
+        <div style="font-size: 12px; color: #ccc; margin-bottom: 10px;">※終了地点に達すると自動で保存されます。</div>
+        <button id="cancel-btn" class="btn btn-cancel" style="padding: 6px; font-size: 12px; width: 100%;">途中で録画を終了して保存</button>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    const map = L.map('map', { center: [35.6812, 139.7671], zoom: 13 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
+
+    let routeData = [];
+    let marker = null;
+    let polyline = null;
+    let isPlaying = false;
+    let currentIndex = 0;       
+    let lastTimestamp = 0;
+    
+    let recordStartIndex = 0;
+    let recordEndIndex = 0;
+    let isExportingMode = false;
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let activeStream = null;
+    let animationFrameId = null;
+    let previewWindow = null;
+    let recordStartTimeStamp = 0;
+    let goalTimeStamp = 0;
+
+    const fileInput = document.getElementById('kml-file');
+    const playBtn = document.getElementById('play-btn');
+    const timeline = document.getElementById('timeline');
+    const timeDisplay = document.getElementById('time-display');
+    const speedSelect = document.getElementById('speed-select');
+    const iconSelect = document.getElementById('icon-select');
+    const colorPicker = document.getElementById('route-color');
+    const trackCheckbox = document.getElementById('track-marker');
+    const qualitySelect = document.getElementById('quality-select');
+    
+    const setStartBtn = document.getElementById('set-start-btn');
+    const setEndBtn = document.getElementById('set-end-btn');
+    const rangeHighlight = document.getElementById('range-highlight');
+    const rangeText = document.getElementById('range-text');
+    const exportBtn = document.getElementById('export-btn');
+    
+    const progressPanel = document.getElementById('progress-panel');
+    const statusText = document.getElementById('status-text');
+    const cancelBtn = document.getElementById('cancel-btn');
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => parseKML(ev.target.result);
+        reader.readAsText(file);
+    });
+
+    function parseKML(text) {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(text, "text/xml");
+        routeData = [];
+        const whens = xml.getElementsByTagName("when");
+        const coords = xml.getElementsByTagName("coord");
+        
+        if (whens.length > 0 && coords.length > 0) {
+            for (let i = 0; i < whens.length; i++) {
+                const c = coords[i].textContent.trim().split(/\s+/);
+                routeData.push({ lat: parseFloat(c[1]), lng: parseFloat(c[0]), time: new Date(whens[i].textContent) });
+            }
+        } else {
+            const coordinatesNodes = xml.getElementsByTagName("coordinates");
+            if(coordinatesNodes.length > 0){
+                let targetNode = coordinatesNodes[0];
+                for(let i=1; i<coordinatesNodes.length; i++) {
+                    if(coordinatesNodes[i].textContent.length > targetNode.textContent.length) targetNode = coordinatesNodes[i];
+                }
+                const rawCoords = targetNode.textContent.trim().split(/\s+/);
+                const startTime = new Date();
+                rawCoords.forEach((str, i) => {
+                    const c = str.split(',');
+                    if (c.length >= 2) {
+                        routeData.push({ lat: parseFloat(c[1]), lng: parseFloat(c[0]), time: new Date(startTime.getTime() + i * 1000) });
+                    }
+                });
+            }
+        }
+
+        if (routeData.length > 0) setupRoute();
+        else alert("有効なルートが見つかりませんでした。");
+    }
+
+    function setupRoute() {
+        if (polyline) map.removeLayer(polyline);
+        if (marker) map.removeLayer(marker);
+        isPlaying = false;
+        playBtn.textContent = "再生";
+
+        const latLngs = routeData.map(d => [d.lat, d.lng]);
+        polyline = L.polyline(latLngs, { color: colorPicker.value, weight: 5 }).addTo(map);
+        updateMarkerIcon();
+        marker = L.marker(latLngs[0], { icon: currentIcon }).addTo(map);
+        map.fitBounds(polyline.getBounds());
+        
+        timeline.max = routeData.length - 1;
+        timeline.value = 0;
+        timeline.disabled = false;
+        playBtn.disabled = false;
+        
+        recordStartIndex = 0;
+        recordEndIndex = routeData.length - 1;
+        
+        setStartBtn.disabled = false;
+        setEndBtn.disabled = false;
+        exportBtn.disabled = false;
+        
+        currentIndex = 0;
+        updateRangeUI();
+        updateUI();
+    }
+
+    let currentIcon;
+    function updateMarkerIcon() {
+        const iconClass = iconSelect.value;
+        const color = colorPicker.value;
+        currentIcon = L.divIcon({
+            html: `<i class="fa-solid ${iconClass}" style="color: ${color}; font-size: 26px; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff;"></i>`,
+            className: 'custom-div-icon', iconSize: [26, 26], iconAnchor: [13, 13]
+        });
+        if (marker) marker.setIcon(currentIcon);
+    }
+
+    colorPicker.addEventListener('input', () => {
+        if (polyline) polyline.setStyle({ color: colorPicker.value });
+        updateMarkerIcon();
+    });
+    iconSelect.addEventListener('change', updateMarkerIcon);
+
+    setStartBtn.addEventListener('click', () => {
+        recordStartIndex = parseInt(timeline.value);
+        if(recordStartIndex > recordEndIndex) recordEndIndex = recordStartIndex;
+        updateRangeUI();
+    });
+
+    setEndBtn.addEventListener('click', () => {
+        recordEndIndex = parseInt(timeline.value);
+        if(recordEndIndex < recordStartIndex) recordStartIndex = recordEndIndex;
+        updateRangeUI();
+    });
+
+    function updateRangeUI() {
+        const max = routeData.length - 1;
+        if(max <= 0) return;
+
+        const startPercent = (recordStartIndex / max) * 100;
+        const endPercent = (recordEndIndex / max) * 100;
+        
+        rangeHighlight.style.left = startPercent + '%';
+        rangeHighlight.style.width = (endPercent - startPercent) + '%';
+        rangeHighlight.style.display = 'block';
+
+        const tStart = routeData[recordStartIndex].time.toTimeString().split(' ')[0];
+        const tEnd = routeData[recordEndIndex].time.toTimeString().split(' ')[0];
+        rangeText.textContent = `録画範囲: ${tStart} ～ ${tEnd}`;
+    }
+
+    playBtn.addEventListener('click', () => {
+        if(isExportingMode) return;
+        isPlaying = !isPlaying;
+        playBtn.textContent = isPlaying ? "一時停止" : "再生";
+        if (isPlaying) {
+            if (currentIndex >= routeData.length - 1) currentIndex = 0;
+            lastTimestamp = performance.now();
+            animationFrameId = requestAnimationFrame(animate);
+        }
+    });
+
+    function animate(now) {
+        if (!isPlaying) return;
+        if (currentIndex >= routeData.length - 1) {
+            isPlaying = false; playBtn.textContent = "再生"; currentIndex = routeData.length - 1;
+            updateUI(); return;
+        }
+
+        const deltaTime = (now - lastTimestamp) / 1000;
+        lastTimestamp = now;
+        
+        const speed = parseFloat(speedSelect.value);
+        currentIndex += deltaTime * speed * 10;
+
+        if (currentIndex >= routeData.length - 1) currentIndex = routeData.length - 1;
+        
+        updateMarkerPosition();
+        animationFrameId = requestAnimationFrame(animate);
+    }
+
+    function updateMarkerPosition() {
+        const data = routeData[Math.floor(currentIndex)];
+        if (data) {
+            const currentLatLng = [data.lat, data.lng];
+            if (marker) marker.setLatLng(currentLatLng);
+            timeline.value = Math.floor(currentIndex);
+            if (trackCheckbox.checked) map.panTo(currentLatLng, { animate: false });
+            updateUI();
+            
+            if (previewWindow && previewWindow.syncMap) {
+                previewWindow.syncMap(data.lat, data.lng, trackCheckbox.checked);
+            }
+        }
+    }
+
+    timeline.addEventListener('input', () => {
+        currentIndex = parseInt(timeline.value);
+        updateMarkerPosition();
+    });
+
+    function updateUI() {
+        const data = routeData[Math.floor(currentIndex)];
+        if (data) timeDisplay.textContent = data.time.toTimeString().split(' ')[0];
+    }
+
+    // ==========================================================
+    // 録画制御（ノイズ・バースト低減版）
+    // ==========================================================
+    exportBtn.addEventListener('click', async () => {
+        if (routeData.length === 0 || isExportingMode) return;
+
+        const wWidth = 1280;
+        const wHeight = 720;
+        const left = (screen.width - wWidth) / 2;
+        const top = (screen.height - wHeight) / 2;
+        
+        previewWindow = window.open("", "MapPreview", `width=${wWidth},height=${wHeight},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`);
+        
+        if (!previewWindow) {
+            alert("ポップアップブロックを解除してください。");
+            return;
+        }
+
+        previewWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+                <style>
+                    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #fff; }
+                    #sub-map { width: 100%; height: 100%; }
+                    .leaflet-control-attribution, .leaflet-control-zoom { display: none !important; }
+                </style>
+            </head>
+            <body>
+                <div id="sub-map"></div>
+                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+                <script>
+                    const subMap = L.map('sub-map', { zoomControl: false, attributionControl: false }).setView([${map.getCenter().lat}, ${map.getCenter().lng}], ${map.getZoom()});
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(subMap);
+                    
+                    const subPolyline = L.polyline(${JSON.stringify(routeData.map(d => [d.lat, d.lng]))}, { 
+                        color: '${colorPicker.value}', 
+                        weight: 5 
+                    }).addTo(subMap);
+                    
+                    const subIcon = L.divIcon({
+                        html: \`<i class="fa-solid ${iconSelect.value}" style="color: ${colorPicker.value}; font-size: 26px; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff;"></i>\`,
+                        className: 'custom-div-icon', iconSize: [26, 26], iconAnchor: [13, 13]
+                    });
+                    const subMarker = L.marker([${routeData[recordStartIndex].lat}, ${routeData[recordStartIndex].lng}], { icon: subIcon }).addTo(subMap);
+                    
+                    window.syncMap = function(lat, lng, track) {
+                        subMarker.setLatLng([lat, lng]);
+                        if(track) subMap.panTo([lat, lng], { animate: false });
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        previewWindow.document.close();
+
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        try {
+            activeStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { 
+                    displaySurface: "window",
+                    frameRate: { ideal: 30, max: 60 } // フレームレートの安定化
+                },
+                audio: false
+            });
+
+            const videoTrack = activeStream.getVideoTracks()[0];
+            videoTrack.onended = () => { if (isExportingMode) stopAndSaveRecording(); };
+
+            recordedChunks = [];
+            let options = { mimeType: 'video/webm;codecs=vp9' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'video/webm;codecs=vp8' };
+            }
+            
+            options.videoBitsPerSecond = parseInt(qualitySelect.value);
+            
+            mediaRecorder = new MediaRecorder(activeStream, options);
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+            };
+            mediaRecorder.onstop = () => saveFile();
+
+            isPlaying = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            isExportingMode = true;
+            currentIndex = recordStartIndex;
+            updateMarkerPosition();
+
+            mediaRecorder.start(1000); // 1秒ごとにデータを区切ってバッファのあふれを防止
+            progressPanel.style.display = 'block';
+            
+            recordStartTimeStamp = performance.now();
+            lastTimestamp = recordStartTimeStamp;
+            goalTimeStamp = 0;
+            
+            // 動き出しのクッション時間（秒）
+            const easeInDuration = 1.5;
+
+            requestAnimationFrame(function recordLoop(now) {
+                if (!isExportingMode) return;
+
+                const elapsedSeconds = (now - recordStartTimeStamp) / 1000;
+                const waitTime = 10.0; 
+
+                // 1. 冒頭10秒間の待機フェーズ
+                if (elapsedSeconds < waitTime) {
+                    const remaining = Math.ceil(waitTime - elapsedSeconds);
+                    statusText.textContent = `⏳ 通知バーの消滅を待っています (${remaining}秒)...`;
+                    lastTimestamp = now;
+                    animationFrameId = requestAnimationFrame(recordLoop);
+                    return;
+                }
+
+                // 2. 移動アニメーションフェーズ
+                if (currentIndex < recordEndIndex) {
+                    statusText.textContent = "🔴 ポップアップ窓を録画中...";
+                    
+                    const deltaTime = (now - lastTimestamp) / 1000;
+                    lastTimestamp = now;
+                    
+                    const baseSpeed = parseFloat(speedSelect.value);
+                    
+                    // 【対策】動き出し直後の1.5秒間は、エンコーダの負荷を下げるために超低速からじわっと加速させる
+                    const moveElapsed = elapsedSeconds - waitTime;
+                    let currentSpeed = baseSpeed;
+                    if (moveElapsed < easeInDuration) {
+                        const progress = moveElapsed / easeInDuration; // 0.0 ～ 1.0
+                        currentSpeed = baseSpeed * (progress * 0.8 + 0.2); // 20%の速度から徐々に加速
+                    }
+                    
+                    currentIndex += deltaTime * currentSpeed * 10;
+
+                    if (currentIndex >= recordEndIndex) {
+                        currentIndex = recordEndIndex;
+                        goalTimeStamp = now;
+                    }
+                    updateMarkerPosition();
+                    animationFrameId = requestAnimationFrame(recordLoop);
+                    return;
+                }
+
+                // 3. ゴール後の5秒間静止キープフェーズ
+                if (goalTimeStamp > 0) {
+                    const postGoalElapsed = (now - goalTimeStamp) / 1000;
+                    const keepTime = 5.0;
+
+                    if (postGoalElapsed < keepTime) {
+                        const remainingKeep = Math.ceil(keepTime - postGoalElapsed);
+                        statusText.textContent = `🏁 ゴール！余韻を録画中 (${remainingKeep}秒)...`;
+                        animationFrameId = requestAnimationFrame(recordLoop);
+                    } else {
+                        stopAndSaveRecording();
+                    }
+                }
+            });
+
+        } catch (err) {
+            console.error(err);
+            alert("キャプチャ窓が正しく指定されませんでした。");
+            isExportingMode = false;
+            progressPanel.style.display = 'none';
+            if (previewWindow) previewWindow.close();
+        }
+    });
+
+    function stopAndSaveRecording() {
+        if (!isExportingMode) return;
+        isExportingMode = false;
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        if (activeStream) activeStream.getTracks().forEach(track => track.stop());
+        if (previewWindow) previewWindow.close();
+    }
+
+    function saveFile() {
+        statusText.textContent = "ファイルを最終処理して保存中...";
+        setTimeout(() => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            if (blob.size > 1000) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `route_premium_${Date.now()}.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert("録画データの取得に失敗しました。");
+            }
+            progressPanel.style.display = 'none';
+        }, 500);
+    }
+
+    cancelBtn.addEventListener('click', () => { stopAndSaveRecording(); });
+</script>
+</body>
+</html>
